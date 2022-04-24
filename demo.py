@@ -3,8 +3,8 @@
 import sys
 sys.path.append("/usr/share/motor-realtime")
 
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QTimer, Qt, QMargins
+from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
     QMainWindow,
@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QLineEdit,
 )
-from PyQt6.QtGui import QPalette, QColor, QDoubleValidator
+from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 import motor
 
 import signal
@@ -51,7 +51,9 @@ class DataDisplay(QWidget):
         self.fields = ["mcu_timestamp", "motor_position", "joint_position", "iq", 
             "torque"]
         self.numbers = []
-        layout = QVBoxLayout()       
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)    
+        layout.setContentsMargins(QMargins(0,0,0,0))
         
         self.freeze = QPushButton(self)
         self.freeze.clicked.connect(self.pause)
@@ -63,7 +65,7 @@ class DataDisplay(QWidget):
             self.numbers.append(widget)
             layout.addWidget(widget)
         
-
+        layout.setSpacing(0)
         self.setLayout(layout)
 
         self.timer = QTimer()
@@ -90,6 +92,7 @@ class Position(QWidget):
         self.name = "position"
         self.numbers = []
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.widget = NumberEdit("position")
         self.widget.number_widget.editingFinished.connect(self.position_update)
         self.widget.number_widget.setValidator(QDoubleValidator())       
@@ -123,14 +126,12 @@ class MainWindow(QMainWindow):
         self.last_tab = self.tabs.currentWidget()
 
         self.tabs.currentChanged.connect(self.new_tab)
+        self.showFullScreen()
 
     def new_tab(self, index):
         print("last tab " + str(index) + " " + self.last_tab.name)
         print("new tab " + str(index) + " " + self.tabs.widget(index).name)
         self.last_tab = self.tabs.widget(index)
-    
-
-
 
 
 app = QApplication(sys.argv)
