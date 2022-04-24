@@ -117,6 +117,7 @@ class Plot(QWidget):
 
         self.chart = QChart()
         self.chart_view = QChartView(self.chart)
+        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.layout = QHBoxLayout()
         self.layout.addWidget(self.chart_view)
         self.setLayout(self.layout)
