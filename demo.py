@@ -2,8 +2,10 @@
 
 import sys
 sys.path.append("/usr/share/motor-realtime")
+import os
+os.environ["QT_SCALE_FACTOR"] = "2"
 
-from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication
+from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
@@ -15,6 +17,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QLineEdit,
+    QSlider,
 )
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
@@ -26,22 +29,45 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 motor_manager = None
 
 class NumberEdit(QWidget):
-    def __init__(self, name):
+    signal = pyqtSignal(float)
+    def __init__(self, name, value=0):
         super(NumberEdit, self).__init__()
-        layout = QHBoxLayout()
+        
+        self.layout = QHBoxLayout()
         self.name = name
-        layout.addWidget(QLabel(name))
-        self.number_widget = QLineEdit(name)
-        layout.addWidget(self.number_widget)
-        self.setLayout(layout)
+        self.layout.addWidget(QLabel(name))
+        self.number_widget = QLineEdit()
+        self.setNumber(value)
+        self.number_widget.editingFinished.connect(self.editingFinished)
+        self.layout.addWidget(self.number_widget)
+        self.setLayout(self.layout)
     
     def setNumber(self, number):
         self.number_widget.setText(str(number))
+
+    def editingFinished(self):
+        self.signal.emit(float(self.number_widget.text()))
 
 class NumberDisplay(NumberEdit):
     def __init__(self, *args, **kwargs):
         super(NumberDisplay, self).__init__(*args, **kwargs)
         self.number_widget.setReadOnly(True)
+
+class NumberEditSlider(NumberEdit):
+    def __init__(self, *args, **kwargs):
+        super(NumberEditSlider, self).__init__(*args, **kwargs)
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.valueChanged.connect(self.valueChanged)
+        self.number_widget.editingFinished.connect(self.valueChangedEdit)
+        self.layout.addWidget(self.slider)
+        #self.setLayout(layout)
+    
+    def valueChanged(self, value):
+        self.setNumber(value)
+        self.signal.emit(float(value))
+
+    def valueChangedEdit(self):
+        self.slider.setValue(int(float(self.number_widget.text())))
 
 class DataDisplay(QWidget):
     def __init__(self):
@@ -94,9 +120,11 @@ class Position(QWidget):
         self.numbers = []
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.widget = NumberEdit("position")
-        self.widget.number_widget.editingFinished.connect(self.position_update)
+        self.widget = NumberEditSlider("position")
+        #self.widget.number_widget.editingFinished.connect(self.position_update)
         self.widget.number_widget.setValidator(QDoubleValidator())       
+        self.widget.signal.connect(self.position_update)
+        
         layout.addWidget(self.widget)
         self.setLayout(layout)
 
@@ -156,6 +184,55 @@ class Plot(QWidget):
         self.axis_x.setMax(self.t_seconds)
         self.axis_x.setMin(self.series.at(0).x())
 
+class Impedance(QWidget):
+    global motor_manager
+
+    def __init__(self):
+        super(Impedance, self).__init__()
+        self.setAutoFillBackground(True)
+        self.name = "impedance"
+
+        self.chart = QChart()
+        self.chart_view = QChartView(self.chart)
+        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+        self.layout = QHBoxLayout()
+        self.layout.addWidget(self.chart_view)
+        self.setLayout(self.layout)
+
+        self.series = QLineSeries()
+        self.chart.addSeries(self.series)
+        self.axis_x = QValueAxis()
+        self.axis_x.setTickCount(10)
+        self.axis_x.setTitleText("Time (s)")
+        self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
+        self.series.attachAxis(self.axis_x)
+        self.axis_y = QValueAxis()
+        self.axis_y.setTickCount(10)
+        self.axis_y.setTitleText("Value")
+        self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
+        self.series.attachAxis(self.axis_y)
+        self.axis_y.setRange(-10,10)
+
+        s = motor_manager.read()[0]
+        self.mcu_timestamp = s.mcu_timestamp
+        self.t_seconds = 0.0
+        self.series.append(0, s.iq)
+
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update)
+        self.timer.start(10)
+
+
+    def update(self):
+        s = motor_manager.read()[0]
+        self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/170e6
+        self.mcu_timestamp = s.mcu_timestamp
+        self.series.append(self.t_seconds, s.iq)
+        if len(self.series) > 500:
+            self.series.remove(0)
+        self.axis_x.setMax(self.t_seconds)
+        self.axis_x.setMin(self.series.at(0).x())
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -172,9 +249,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(DataDisplay(), "data")
         self.tabs.addTab(Position(), "position")
         self.tabs.addTab(Plot(), "plot")
+        self.tabs.addTab(Impedance(), "impedance")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
+        self.resize(1280//2,720//2)
 
         self.tabs.currentChanged.connect(self.new_tab)
         if "-fullscreen" in QCoreApplication.arguments():
