@@ -29,6 +29,49 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 motor_manager = None
 
+
+class NumberEdit(QWidget):
+    signal = pyqtSignal(float)
+    def __init__(self, name, value=0):
+        super(NumberEdit, self).__init__()
+        
+        self.layout = QHBoxLayout()
+        self.name = name
+        self.layout.addWidget(QLabel(name))
+        self.number_widget = QLineEdit()
+        self.setNumber(value)
+        self.number_widget.editingFinished.connect(self.editingFinished)
+        self.layout.addWidget(self.number_widget)
+        self.setLayout(self.layout)
+    
+    def setNumber(self, number):
+        self.number_widget.setText(str(number))
+
+    def editingFinished(self):
+        self.signal.emit(float(self.number_widget.text()))
+
+class NumberDisplay(NumberEdit):
+    def __init__(self, *args, **kwargs):
+        super(NumberDisplay, self).__init__(*args, **kwargs)
+        self.number_widget.setReadOnly(True)
+
+class NumberEditSlider(NumberEdit):
+    def __init__(self, *args, **kwargs):
+        super(NumberEditSlider, self).__init__(*args, **kwargs)
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.valueChanged.connect(self.valueChanged)
+        self.number_widget.editingFinished.connect(self.valueChangedEdit)
+        self.layout.addWidget(self.slider)
+        #self.setLayout(layout)
+    
+    def valueChanged(self, value):
+        self.setNumber(value)
+        self.signal.emit(float(value))
+
+    def valueChangedEdit(self):
+        self.slider.setValue(int(float(self.number_widget.text())))
+
+
 class StatusDisplay(QPushButton):
     def __init__(self, *args, **kwargs):
         super(StatusDisplay, self).__init__(*args, **kwargs)
@@ -88,6 +131,7 @@ class FaultTab(MotorTab):
         mask = motor_manager.motors()[0].error_mask()
         self.fields = ["mode", *list(mask.keys())]
         self.faults = []
+        outer_layout = QHBoxLayout()
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)    
         layout.setContentsMargins(QMargins(0,0,0,0))
@@ -103,7 +147,20 @@ class FaultTab(MotorTab):
             layout.addWidget(widget)
         
         layout.setSpacing(0)
-        self.setLayout(layout)
+        outer_layout.addLayout(layout)
+
+        layout2 = QVBoxLayout()
+        self.button = QPushButton("driver_enable")
+        self.button.clicked.connect(self.driver_enable)
+        layout2.addWidget(self.button)
+        outer_layout.addLayout(layout2)
+        self.setLayout(outer_layout)
+
+    def driver_enable(self):
+        print("driver enable")
+        motor_manager.set_command_mode(motor.ModeDesired.DriverEnable)
+        motor_manager.write_saved_commands()
+
 
     def update(self):
         super(FaultTab, self).update()
@@ -261,6 +318,44 @@ class PlotTab2(MotorTab):
         except ValueError:
             pass
 
+class VelocityTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(VelocityTab, self).__init__(*args, **kwargs)
+        self.setAutoFillBackground(True)
+
+        self.name = "velocity"
+        self.numbers = []
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.widget = NumberEditSlider("velocity")
+        #self.widget.number_widget.editingFinished.connect(self.position_update)
+        self.widget.number_widget.setValidator(QDoubleValidator())
+        self.widget.slider.setMinimum(-1000)
+        self.widget.slider.setMaximum(1000)
+        self.widget.slider.setPageStep(50)       
+        self.widget.signal.connect(self.velocity_update)
+        
+        layout.addWidget(self.widget)
+        self.velocity_measured = NumberDisplay("velocity measured")
+        layout.addWidget(self.velocity_measured)
+        self.setLayout(layout)
+        self.mcu_timestamp = 0
+        self.motor_position = 0
+
+    def update(self):
+        super(VelocityTab, self).update()
+        dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/170e6
+        self.mcu_timestamp = self.status.mcu_timestamp
+        dp = self.status.motor_position - self.motor_position
+        self.motor_position = self.status.motor_position
+        self.velocity_measured.setNumber(dp/dt)
+
+    def velocity_update(self):
+        p = float(self.widget.number_widget.text())
+        print("velocity command " + str(p))
+        motor_manager.set_command_velocity([p])
+        motor_manager.set_command_mode(motor.ModeDesired.Velocity)
+        motor_manager.write_saved_commands()
 
 class MainWindow(QMainWindow):
 
@@ -287,6 +382,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(StatusTab(), "status")
         self.tabs.addTab(PlotTab(), "plot")
         self.tabs.addTab(PlotTab2(), "plot2")
+        self.tabs.addTab(VelocityTab(), "velocity")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
