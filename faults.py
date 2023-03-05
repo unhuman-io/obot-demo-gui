@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QTabWidget,
     QWidget,
+    QGridLayout,
     QHBoxLayout,
     QVBoxLayout,
     QLineEdit,
@@ -39,6 +40,7 @@ class NumberEdit(QWidget):
         self.name = name
         self.layout.addWidget(QLabel(name))
         self.number_widget = QLineEdit()
+        self.number_widget.setValidator(QDoubleValidator())
         self.setNumber(value)
         self.number_widget.editingFinished.connect(self.editingFinished)
         self.layout.addWidget(self.number_widget)
@@ -71,6 +73,17 @@ class NumberEditSlider(NumberEdit):
     def valueChangedEdit(self):
         self.slider.setValue(int(float(self.number_widget.text())))
 
+class ParameterEdit(NumberEdit):
+    def __init__(self, *args, **kwargs):
+        super(ParameterEdit, self).__init__(*args, **kwargs)
+        self.signal.connect(self.set_value)
+
+    def refresh_value(self):
+        self.setNumber(motor_manager.motors()[0][self.name].get())
+
+    def set_value(self, value):
+        print("set {}={}".format(self.name, value))
+        motor_manager.motors()[0][self.name] = str(value)
 
 class StatusDisplay(QPushButton):
     def __init__(self, *args, **kwargs):
@@ -328,7 +341,6 @@ class VelocityTab(MotorTab):
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.widget = NumberEditSlider("velocity")
         #self.widget.number_widget.editingFinished.connect(self.position_update)
-        self.widget.number_widget.setValidator(QDoubleValidator())
         self.widget.slider.setMinimum(-1000)
         self.widget.slider.setMaximum(1000)
         self.widget.slider.setPageStep(50)       
@@ -441,7 +453,6 @@ class CurrentTuningTab(MotorTab):
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.amplitude = NumberEditSlider("amplitude")
-        self.amplitude.number_widget.setValidator(QDoubleValidator())
         self.amplitude.slider.setMinimum(-100)
         self.amplitude.slider.setMaximum(100)
         self.amplitude.slider.setPageStep(5)       
@@ -449,7 +460,6 @@ class CurrentTuningTab(MotorTab):
         layout.addWidget(self.amplitude)
 
         self.bias = NumberEditSlider("bias")
-        self.bias.number_widget.setValidator(QDoubleValidator())
         self.bias.slider.setMinimum(-100)
         self.bias.slider.setMaximum(100)
         self.bias.slider.setPageStep(5)       
@@ -457,7 +467,6 @@ class CurrentTuningTab(MotorTab):
         layout.addWidget(self.bias)
 
         self.frequency = NumberEditSlider("frequency")
-        self.frequency.number_widget.setValidator(QDoubleValidator())
         self.frequency.slider.setMinimum(0)
         self.frequency.slider.setMaximum(10000)
         self.frequency.slider.setPageStep(50)       
@@ -469,10 +478,32 @@ class CurrentTuningTab(MotorTab):
         self.mode.currentTextChanged.connect(self.mode_update)
         layout.addWidget(self.mode)
 
+        parameter_layout = QGridLayout()
+        self.kp = ParameterEdit("ikp")
+        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idkp"].set(str(val)))
+        self.ki = ParameterEdit("iki")
+        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idki"].set(str(val)))
+        self.ki_limit = ParameterEdit("iki_limit")
+        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idki_limit"].set(str(val)))
+        self.command_max = ParameterEdit("imax")
+        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idmax"].set(str(val)))
+        parameter_layout.addWidget(self.kp,0,0)
+        parameter_layout.addWidget(self.ki,0,1)
+        parameter_layout.addWidget(self.ki_limit,1,0)
+        parameter_layout.addWidget(self.command_max,1,1)
+
+        layout.addLayout(parameter_layout)
         self.setLayout(layout)
 
     def update(self):
         super(CurrentTuningTab, self).update()
+
+    def unpause(self):
+        self.kp.refresh_value()
+        self.ki.refresh_value()
+        self.ki_limit.refresh_value()
+        self.command_max.refresh_value()
+        return super().unpause()
 
     def command_update(self):
         print(self.command)
