@@ -491,12 +491,15 @@ class CurrentTuningTab(MotorTab):
         parameter_layout.addWidget(self.ki,0,1)
         parameter_layout.addWidget(self.ki_limit,1,0)
         parameter_layout.addWidget(self.command_max,1,1)
-
         layout.addLayout(parameter_layout)
+
+        self.text = QPlainTextEdit()
+        layout.addWidget(self.text)
         self.setLayout(layout)
 
     def update(self):
         super(CurrentTuningTab, self).update()
+        self.text.setPlainText(motor_manager.motors()[0].get_fast_log())
 
     def unpause(self):
         self.kp.refresh_value()
