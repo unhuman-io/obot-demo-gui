@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QTabWidget,
     QWidget,
-    QGridLayout,
     QHBoxLayout,
     QVBoxLayout,
     QLineEdit,
@@ -19,6 +18,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QMenuBar,
     QMenu,
+    QPlainTextEdit,
 )
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
@@ -321,7 +321,6 @@ class PlotTab2(MotorTab):
 class VelocityTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(VelocityTab, self).__init__(*args, **kwargs)
-        self.setAutoFillBackground(True)
 
         self.name = "velocity"
         self.numbers = []
@@ -357,6 +356,30 @@ class VelocityTab(MotorTab):
         motor_manager.set_command_mode(motor.ModeDesired.Velocity)
         motor_manager.write_saved_commands()
 
+
+class LogTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(LogTab, self).__init__(*args, **kwargs)
+
+        self.name = "log"
+        self.numbers = []
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.widget = QPlainTextEdit()
+
+        layout.addWidget(self.widget)
+        self.setLayout(layout)
+
+    def update(self):
+        super(LogTab, self).update()
+        while True:
+            log = motor_manager.motors()[0]["log"].get()
+            if log == "log end":
+                break
+            else:
+                self.widget.appendPlainText(log)
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -383,6 +406,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(PlotTab(), "plot")
         self.tabs.addTab(PlotTab2(), "plot2")
         self.tabs.addTab(VelocityTab(), "velocity")
+        self.tabs.addTab(LogTab(), "log")
+        self.tabs.addTab(CurrentTuningTab(), "current tuning")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
@@ -395,7 +420,8 @@ class MainWindow(QMainWindow):
     def connect_motor(self, name):
          print("Connecting motor " + name)
          motor_manager.get_motors_by_name([name])
-         self.setWindowTitle(name)
+         motor_manager.set_auto_count()
+         self.setWindowTitle(name + " sn:" + motor_manager.motors()[0].serial_number())
 
     def new_tab(self, index):
         #print("last tab " + str(index) + " " + self.last_tab.name)
@@ -404,6 +430,69 @@ class MainWindow(QMainWindow):
         self.tabs.widget(index).unpause()
         self.last_tab = self.tabs.widget(index)
 
+class CurrentTuningTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(CurrentTuningTab, self).__init__(*args, **kwargs)
+
+        self.name = "current_tuning"
+        self.command = motor.Command()
+        self.command.mode_desired = motor.ModeDesired.CurrentTuning
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.amplitude = NumberEditSlider("amplitude")
+        self.amplitude.number_widget.setValidator(QDoubleValidator())
+        self.amplitude.slider.setMinimum(-100)
+        self.amplitude.slider.setMaximum(100)
+        self.amplitude.slider.setPageStep(5)       
+        self.amplitude.signal.connect(self.amplitude_update)
+        layout.addWidget(self.amplitude)
+
+        self.bias = NumberEditSlider("bias")
+        self.bias.number_widget.setValidator(QDoubleValidator())
+        self.bias.slider.setMinimum(-100)
+        self.bias.slider.setMaximum(100)
+        self.bias.slider.setPageStep(5)       
+        self.bias.signal.connect(self.bias_update)
+        layout.addWidget(self.bias)
+
+        self.frequency = NumberEditSlider("frequency")
+        self.frequency.number_widget.setValidator(QDoubleValidator())
+        self.frequency.slider.setMinimum(0)
+        self.frequency.slider.setMaximum(10000)
+        self.frequency.slider.setPageStep(50)       
+        self.frequency.signal.connect(self.frequency_update)
+        layout.addWidget(self.frequency)
+
+        self.mode = QComboBox()
+        self.mode.addItems(motor.TuningMode.__members__)
+        self.mode.currentTextChanged.connect(self.mode_update)
+        layout.addWidget(self.mode)
+
+        self.setLayout(layout)
+
+    def update(self):
+        super(CurrentTuningTab, self).update()
+
+    def command_update(self):
+        print(self.command)
+        motor_manager.write([self.command])
+        
+    def amplitude_update(self):
+        self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
+        self.command_update()
+
+    def bias_update(self):
+        self.command.current_tuning.bias = float(self.bias.number_widget.text())
+        self.command_update()
+
+    def frequency_update(self):
+        self.command.current_tuning.frequency = float(self.frequency.number_widget.text())
+        self.command_update()
+
+    def mode_update(self, selection):
+        self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
+        self.command_update()
 
 app = QApplication(sys.argv)
 
