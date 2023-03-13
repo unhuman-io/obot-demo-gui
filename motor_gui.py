@@ -194,7 +194,8 @@ class StatusTab(MotorTab):
 
         self.name = "status"
         #print("init: " + self.name)
-        self.field_names = motor_manager.motors()[0]["help"].get().split('\n')
+        #self.field_names = motor_manager.motors()[0]["help"].get().split('\n')
+        self.field_names = motor_manager.motors()[0].get_api_options()
 
         self.statuses = []
         layout = QVBoxLayout()
@@ -205,6 +206,7 @@ class StatusTab(MotorTab):
             layout.addWidget(self.statuses[i])
             self.statuses[i].signal.connect(self.valueEdit)
             self.statuses[i].combo_box.addItems(self.field_names)
+        self.statuses[0].combo_box.setCurrentText("vbus")
         self.setLayout(layout)
 
 
@@ -404,10 +406,14 @@ class MainWindow(QMainWindow):
         self.motor_menu = QMenu("&Motor")
         self.menu_bar.addMenu(self.motor_menu)
         self.setMenuBar(self.menu_bar)
+        actions = []
         for m in motors:
-            action = self.motor_menu.addAction(m.name())
-            action.triggered.connect(lambda: self.connect_motor(m.name()))
+            actions.append(self.motor_menu.addAction(m.name()))
+            print(m.name())
+            actions[-1].triggered.connect(lambda: self.connect_motor(m.name()))
         self.connect_motor(motors[0].name())
+        print(actions)
+        
 
 
         self.tabs = QTabWidget()
