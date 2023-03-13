@@ -57,6 +57,16 @@ class NumberDisplay(NumberEdit):
         super(NumberDisplay, self).__init__(*args, **kwargs)
         self.number_widget.setReadOnly(True)
 
+class APIDisplay(NumberDisplay):
+    def update(self):
+        val = motor_manager.motors()[0][self.name].get()
+        self.number_widget.setText(val)
+
+class APIEdit(NumberEdit):
+    def update(self):
+        pass
+
+
 class NumberEditSlider(NumberEdit):
     def __init__(self, *args, **kwargs):
         super(NumberEditSlider, self).__init__(*args, **kwargs)
@@ -394,6 +404,39 @@ class LogTab(MotorTab):
             else:
                 self.widget.appendPlainText(log)
 
+class CalibrateTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(CalibrateTab, self).__init__(*args, **kwargs)
+
+        self.name = "calibrate"
+        self.numbers = []
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.index_offset = APIDisplay("index_offset_measured")
+        layout.addWidget(self.index_offset)
+
+        self.current_d = APIDisplay("id")
+        layout.addWidget(self.current_d)
+
+        self.button = QPushButton("phase_lock")
+        self.button.clicked.connect(self.phase_lock)
+        layout.addWidget(self.button)
+
+        self.setLayout(layout)
+
+    def update(self):
+        super(CalibrateTab, self).update()
+        self.index_offset.update()
+        self.current_d.update()
+    
+    def phase_lock(self):
+        print("phase lock")
+        motor_manager.set_command_mode(motor.ModeDesired.PhaseLock)
+        motor_manager.set_command_current([10])
+        motor_manager.write_saved_commands()
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -419,19 +462,30 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
 
+        self.tuning_tab = QTabWidget()
+        self.tuning_tab.setTabPosition(QTabWidget.TabPosition.West)
+        self.tuning_tab.unpause = None
+
+
         self.tabs.addTab(FaultTab(), "fault")
         self.tabs.addTab(StatusTab(), "status")
         self.tabs.addTab(PlotTab(), "plot")
         self.tabs.addTab(PlotTab2(), "plot2")
         self.tabs.addTab(VelocityTab(), "velocity")
         self.tabs.addTab(LogTab(), "log")
+        #self.tabs.addTab(self.tuning_tab, "tuning")
+        self.tabs.addTab(CalibrateTab(), "calibrate")
         self.tabs.addTab(CurrentTuningTab(), "current tuning")
+        self.tabs.addTab(PositionTuningTab(), "position tuning")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
         self.last_tab.unpause()
 
+        self.last_tuning_tab = self.tuning_tab.currentWidget()
+
         self.tabs.currentChanged.connect(self.new_tab)
+        self.tuning_tab.currentChanged.connect(self.new_tuning_tab)
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
 
@@ -447,6 +501,12 @@ class MainWindow(QMainWindow):
         #print("new tab " + str(index) + " " + self.tabs.widget(index).name)
         self.tabs.widget(index).unpause()
         self.last_tab = self.tabs.widget(index)
+
+    def new_tuning_tab(self, index):
+        pass
+       # self.last_tuning_tab.pause()
+        #self.tuning_tab.widget(index).unpause()
+        #self.last_tuning_tab = self.tuning_tab.widget(index)
 
 class CurrentTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -511,6 +571,85 @@ class CurrentTuningTab(MotorTab):
         self.kp.refresh_value()
         self.ki.refresh_value()
         self.ki_limit.refresh_value()
+        self.command_max.refresh_value()
+        return super().unpause()
+
+    def command_update(self):
+        print(self.command)
+        motor_manager.write([self.command])
+        
+    def amplitude_update(self):
+        self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
+        self.command_update()
+
+    def bias_update(self):
+        self.command.current_tuning.bias = float(self.bias.number_widget.text())
+        self.command_update()
+
+    def frequency_update(self):
+        self.command.current_tuning.frequency = float(self.frequency.number_widget.text())
+        self.command_update()
+
+    def mode_update(self, selection):
+        self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
+        self.command_update()
+
+
+class PositionTuningTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(PositionTuningTab, self).__init__(*args, **kwargs)
+
+        self.name = "position_tuning"
+        self.command = motor.Command()
+        self.command.mode_desired = motor.ModeDesired.PositionTuning
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.amplitude = NumberEditSlider("amplitude")
+        self.amplitude.slider.setMinimum(-100)
+        self.amplitude.slider.setMaximum(100)
+        self.amplitude.slider.setPageStep(5)       
+        self.amplitude.signal.connect(self.amplitude_update)
+        layout.addWidget(self.amplitude)
+
+        self.bias = NumberEditSlider("bias")
+        self.bias.slider.setMinimum(-100)
+        self.bias.slider.setMaximum(100)
+        self.bias.slider.setPageStep(5)       
+        self.bias.signal.connect(self.bias_update)
+        layout.addWidget(self.bias)
+
+        self.frequency = NumberEditSlider("frequency")
+        self.frequency.slider.setMinimum(0)
+        self.frequency.slider.setMaximum(100)
+        self.frequency.slider.setPageStep(5)       
+        self.frequency.signal.connect(self.frequency_update)
+        layout.addWidget(self.frequency)
+
+        self.mode = QComboBox()
+        self.mode.addItems(motor.TuningMode.__members__)
+        self.mode.currentTextChanged.connect(self.mode_update)
+        layout.addWidget(self.mode)
+
+        parameter_layout = QGridLayout()
+        self.kp = ParameterEdit("kp")
+        self.kd = ParameterEdit("kd")
+        #self.ki_limit = ParameterEdit("ki_limit")
+        self.command_max = ParameterEdit("max")
+        parameter_layout.addWidget(self.kp,0,0)
+        parameter_layout.addWidget(self.kd,0,1)
+        #parameter_layout.addWidget(self.ki_limit,1,0)
+        parameter_layout.addWidget(self.command_max,1,0)
+        layout.addLayout(parameter_layout)
+
+        self.setLayout(layout)
+
+    def update(self):
+        super(PositionTuningTab, self).update()
+
+    def unpause(self):
+        self.kp.refresh_value()
+        self.kd.refresh_value()
         self.command_max.refresh_value()
         return super().unpause()
 
