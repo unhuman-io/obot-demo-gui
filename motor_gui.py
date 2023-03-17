@@ -284,8 +284,8 @@ class PlotTab(MotorTab):
             self.series.remove(0)
         self.axis_x.setMax(self.t_seconds)
         self.axis_x.setMin(self.series.at(0).x())
-        self.axis_y.setMin(min([d.y() for d in self.series.points()]))
-        self.axis_y.setMax(max([d.y() for d in self.series.points()]))
+        self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
+        self.axis_y.setMax(max([d.y() for d in self.series.pointsVector()]))
 
 
 class PlotTab2(MotorTab):
@@ -341,8 +341,8 @@ class PlotTab2(MotorTab):
             self.series.append(self.t_seconds, float(val))
             if len(self.series) > 500:
                 self.series.remove(0)
-            self.axis_y.setMin(min([d.y() for d in self.series.points()]))
-            self.axis_y.setMax(max([d.y() for d in self.series.points()]))
+            self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
+            self.axis_y.setMax(max([d.y() for d in self.series.pointsVector()]))
             self.axis_x.setMax(self.t_seconds)
             self.axis_x.setMin(self.series.at(0).x())
         except ValueError:
@@ -351,6 +351,8 @@ class PlotTab2(MotorTab):
 class VelocityTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(VelocityTab, self).__init__(*args, **kwargs)
+
+        self.update_time = 50
 
         self.name = "velocity"
         self.numbers = []
@@ -362,6 +364,24 @@ class VelocityTab(MotorTab):
         self.widget.slider.setMaximum(1000)
         self.widget.slider.setPageStep(50)       
         self.widget.signal.connect(self.velocity_update)
+
+        self.chart = QChart()
+        self.chart_view = QChartView(self.chart)
+        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+        self.series = QLineSeries()
+        self.series.setUseOpenGL(True)
+        self.chart.addSeries(self.series)
+        self.axis_x = QValueAxis()
+        self.axis_x.setTickCount(10)
+        self.axis_x.setTitleText("Time (s)")
+        self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
+        self.series.attachAxis(self.axis_x)
+        self.axis_y = QValueAxis()
+        self.axis_y.setTickCount(10)
+        self.axis_y.setTitleText("Motor velocity (rad/s)")
+        self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
+        self.series.attachAxis(self.axis_y)
+        self.axis_y.setRange(-100,100)
 
         parameter_layout = QGridLayout()
         self.kp = ParameterEdit("vkp","kp")
@@ -382,19 +402,35 @@ class VelocityTab(MotorTab):
 
         layout.addWidget(self.widget)
         self.velocity_measured = NumberDisplay("velocity measured")
+        layout.addWidget(self.chart_view)
         layout.addWidget(self.velocity_measured)
         layout.addLayout(parameter_layout)
         self.setLayout(layout)
         self.mcu_timestamp = 0
         self.motor_position = 0
+        self.t_seconds = 0.0
 
     def update(self):
         super(VelocityTab, self).update()
         dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/170e6
+        self.t_seconds += dt
         self.mcu_timestamp = self.status.mcu_timestamp
         dp = self.status.motor_position - self.motor_position
         self.motor_position = self.status.motor_position
         self.velocity_measured.setNumber(dp/dt)
+
+        if (abs(dp/dt) < 10000):
+            # reject rollovers
+            try:
+                self.series.append(self.t_seconds, dp/dt)
+                if len(self.series) > 200:
+                    self.series.remove(0)
+                self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
+                self.axis_y.setMax(max([d.y() for d in self.series.pointsVector()]))
+                self.axis_x.setMax(self.t_seconds)
+                self.axis_x.setMin(self.series.at(0).x())
+            except ValueError:
+                pass
 
     def velocity_update(self):
         p = float(self.widget.number_widget.text())
