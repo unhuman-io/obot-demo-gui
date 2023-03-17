@@ -284,6 +284,8 @@ class PlotTab(MotorTab):
             self.series.remove(0)
         self.axis_x.setMax(self.t_seconds)
         self.axis_x.setMin(self.series.at(0).x())
+        self.axis_y.setMin(min([d.y() for d in self.series.points()]))
+        self.axis_y.setMax(max([d.y() for d in self.series.points()]))
 
 
 class PlotTab2(MotorTab):
@@ -303,6 +305,7 @@ class PlotTab2(MotorTab):
         self.field_names = motor_manager.motors()[0]["help"].get().split('\n')
         self.combo_box.addItems(self.field_names)
         self.layout.addWidget(self.combo_box)
+        self.combo_box.setCurrentText("vbus")
         self.layout.addWidget(self.chart_view)
         self.setLayout(self.layout)
 
