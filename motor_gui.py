@@ -33,12 +33,14 @@ motor_manager = None
 
 class NumberEdit(QWidget):
     signal = pyqtSignal(float)
-    def __init__(self, name, value=0):
+    def __init__(self, name, description=None, value=0):
         super(NumberEdit, self).__init__()
         
+        if description is None:
+            description = name
         self.layout = QHBoxLayout()
         self.name = name
-        self.layout.addWidget(QLabel(name))
+        self.layout.addWidget(QLabel(description))
         self.number_widget = QLineEdit()
         self.number_widget.setValidator(QDoubleValidator())
         self.setNumber(value)
@@ -357,10 +359,28 @@ class VelocityTab(MotorTab):
         self.widget.slider.setMaximum(1000)
         self.widget.slider.setPageStep(50)       
         self.widget.signal.connect(self.velocity_update)
-        
+
+        parameter_layout = QGridLayout()
+        self.kp = ParameterEdit("vkp","kp")
+        self.ki = ParameterEdit("vki","ki")
+        self.max = ParameterEdit("vmax","current limit")
+        self.max.signal.connect(lambda val: motor_manager.motors()[0]["vki_limit"].set(str(val)))
+        self.accel = ParameterEdit("vacceleration_limit","acceleration limit")
+        self.imax = ParameterEdit("imax","voltage limit")
+        self.imax.signal.connect(self.set_imax)
+        self.filter = ParameterEdit("voutput_filt", "output filter")
+
+        parameter_layout.addWidget(self.kp,0,0)
+        parameter_layout.addWidget(self.ki,0,1)
+        parameter_layout.addWidget(self.max,1,0)
+        parameter_layout.addWidget(self.accel,1,1)
+        parameter_layout.addWidget(self.imax,2,0)
+        parameter_layout.addWidget(self.filter,2,1)
+
         layout.addWidget(self.widget)
         self.velocity_measured = NumberDisplay("velocity measured")
         layout.addWidget(self.velocity_measured)
+        layout.addLayout(parameter_layout)
         self.setLayout(layout)
         self.mcu_timestamp = 0
         self.motor_position = 0
@@ -379,6 +399,21 @@ class VelocityTab(MotorTab):
         motor_manager.set_command_velocity([p])
         motor_manager.set_command_mode(motor.ModeDesired.Velocity)
         motor_manager.write_saved_commands()
+
+    def set_imax(self, val):
+        motor_manager.motors()[0]["imax"].set(str(val))
+        motor_manager.motors()[0]["idmax"].set(str(val))
+        motor_manager.motors()[0]["iki_limit"].set(str(val))
+        motor_manager.motors()[0]["idki_limit"].set(str(val))
+
+    def unpause(self):
+        self.kp.refresh_value()
+        self.ki.refresh_value()
+        self.max.refresh_value()
+        self.imax.refresh_value()
+        self.accel.refresh_value()
+        self.filter.refresh_value()
+        return super().unpause()
 
 
 class LogTab(MotorTab):
