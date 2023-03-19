@@ -254,7 +254,7 @@ class PlotTab(MotorTab):
         self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.combo_box.addItems(["motor_position", "joint_position", "iq"])
+        self.combo_box.addItems(["motor_position", "joint_position", "iq", "torque"])
         self.layout.addWidget(self.combo_box)
         self.layout.addWidget(self.chart_view)
         self.setLayout(self.layout)
