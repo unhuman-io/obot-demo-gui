@@ -522,7 +522,13 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         global motor_manager
         motor_manager = motor.MotorManager()
-        motors = motor_manager.get_connected_motors(connect=False)
+        self.simulated = False
+        motors = None
+        if "-simulated" in QCoreApplication.arguments():
+            self.simulated = True
+            motors = motor_manager.get_motors_by_name(["sim1", "sim2"], connect=False, allow_simulated = True)
+        else:
+            motors = motor_manager.get_connected_motors(connect=False)
         print(motors)
         self.menu_bar = QMenuBar(self)
         self.motor_menu = QMenu("&Motor")
@@ -568,7 +574,7 @@ class MainWindow(QMainWindow):
     def connect_motor(self, name):
          global cpu_frequency
          print("Connecting motor " + name)
-         motor_manager.get_motors_by_name([name])
+         motor_manager.get_motors_by_name([name], allow_simulated = self.simulated)
          motor_manager.set_auto_count()
          self.setWindowTitle(name + " sn:" + current_motor().serial_number())
          cpu_frequency = current_motor().get_cpu_frequency()
