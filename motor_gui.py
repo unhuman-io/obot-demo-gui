@@ -532,7 +532,7 @@ class MainWindow(QMainWindow):
         for m in motors:
             actions.append(self.motor_menu.addAction(m.name()))
             print(m.name())
-        self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
+        self.motor_menu.triggered.connect(lambda action: self.switch_motor(action.text()))
         self.connect_motor(motors[0].name())
 
         self.tabs = QTabWidget()
@@ -565,6 +565,12 @@ class MainWindow(QMainWindow):
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
 
+    def switch_motor(self, name):
+        self.connect_motor(name)
+        for i in range(self.tabs.count()):
+            self.tabs.widget(i).__init__()
+
+
     def connect_motor(self, name):
          global cpu_frequency
          print("Connecting motor " + name)
@@ -572,7 +578,7 @@ class MainWindow(QMainWindow):
          motor_manager.set_auto_count()
          self.setWindowTitle(name + " sn:" + current_motor().serial_number())
          cpu_frequency = current_motor().get_cpu_frequency()
-
+         
     def new_tab(self, index):
         #print("last tab " + str(index) + " " + self.last_tab.name)
         self.last_tab.pause()
