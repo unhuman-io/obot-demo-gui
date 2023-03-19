@@ -30,12 +30,17 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 motor_manager = None
 
+def current_motor():
+    return motor_manager.motors()[0]
+
+cpu_frequency = 170e6
+
 
 class NumberEdit(QWidget):
     signal = pyqtSignal(float)
     def __init__(self, name, description=None, value=0):
         super(NumberEdit, self).__init__()
-        
+
         if description is None:
             description = name
         self.layout = QHBoxLayout()
@@ -47,7 +52,7 @@ class NumberEdit(QWidget):
         self.number_widget.editingFinished.connect(self.editingFinished)
         self.layout.addWidget(self.number_widget)
         self.setLayout(self.layout)
-    
+
     def setNumber(self, number):
         self.number_widget.setText(str(number))
 
@@ -61,7 +66,7 @@ class NumberDisplay(NumberEdit):
 
 class APIDisplay(NumberDisplay):
     def update(self):
-        val = motor_manager.motors()[0][self.name].get()
+        val = current_motor()[self.name].get()
         self.number_widget.setText(val)
 
 class APIEdit(NumberEdit):
@@ -77,7 +82,7 @@ class NumberEditSlider(NumberEdit):
         self.number_widget.editingFinished.connect(self.valueChangedEdit)
         self.layout.addWidget(self.slider)
         #self.setLayout(layout)
-    
+
     def valueChanged(self, value):
         self.setNumber(value)
         self.signal.emit(float(value))
@@ -91,11 +96,11 @@ class ParameterEdit(NumberEdit):
         self.signal.connect(self.set_value)
 
     def refresh_value(self):
-        self.setNumber(motor_manager.motors()[0][self.name].get())
+        self.setNumber(current_motor()[self.name].get())
 
     def set_value(self, value):
         print("set {}={}".format(self.name, value))
-        motor_manager.motors()[0][self.name] = str(value)
+        current_motor()[self.name] = str(value)
 
 class StatusDisplay(QPushButton):
     def __init__(self, *args, **kwargs):
@@ -111,7 +116,7 @@ class StatusCombo(QWidget):
     signal = pyqtSignal(str, str)
     def __init__(self, *args, **kwargs):
         super(StatusCombo, self).__init__(*args, **kwargs)
-        
+
         self.layout = QHBoxLayout()
         self.combo_box = QComboBox()
         self.layout.addWidget(self.combo_box)
@@ -120,7 +125,7 @@ class StatusCombo(QWidget):
         self.layout.addWidget(self.text_widget)
         self.setLayout(self.layout)
 
-    
+
     def setText(self, number):
         self.text_widget.setText(str(number))
 
@@ -150,27 +155,27 @@ class MotorTab(QWidget):
 class FaultTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(FaultTab, self).__init__(*args, **kwargs)
-        
+
         self.name = "fault"
         #print("init: " + self.name)
-        mask = motor_manager.motors()[0].error_mask()
+        mask = current_motor().error_mask()
         self.fields = ["mode", *list(mask.keys())]
         self.faults = []
         outer_layout = QHBoxLayout()
         layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)    
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setContentsMargins(QMargins(0,0,0,0))
-        
+
 
         for field in self.fields:
             widget = StatusDisplay(field)
             if field in mask.keys():
                 if not mask[field]:
                     widget.setDisabled(True)
-            
+
             self.faults.append(widget)
             layout.addWidget(widget)
-        
+
         layout.setSpacing(0)
         outer_layout.addLayout(layout)
 
@@ -189,7 +194,7 @@ class FaultTab(MotorTab):
 
     def update(self):
         super(FaultTab, self).update()
-        
+
         self.faults[0].setText("mode: " + self.status.flags.mode.name.lower())
         faults = self.status.flags.error.bits
         for widget in self.faults:
@@ -206,12 +211,12 @@ class StatusTab(MotorTab):
 
         self.name = "status"
         #print("init: " + self.name)
-        #self.field_names = motor_manager.motors()[0]["help"].get().split('\n')
-        self.field_names = motor_manager.motors()[0].get_api_options()
+        #self.field_names = current_motor()["help"].get().split('\n')
+        self.field_names = current_motor().get_api_options()
 
         self.statuses = []
         layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)    
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setContentsMargins(QMargins(0,0,0,0))
         for i in range(5):
             self.statuses.append(StatusCombo())
@@ -225,13 +230,13 @@ class StatusTab(MotorTab):
     def valueEdit(self, s, v):
         print("value edit: {}={}".format(s,v))
         if v:
-            motor_manager.motors()[0][s] = v
+            current_motor()[s] = v
 
     def update(self):
         super(StatusTab, self).update()
         for status in self.statuses:
             if not status.text_widget.hasFocus():
-                val = motor_manager.motors()[0][status.combo_box.currentText()].get()
+                val = current_motor()[status.combo_box.currentText()].get()
                 status.setText(val)
 
 
@@ -277,7 +282,7 @@ class PlotTab(MotorTab):
     def update(self):
         super(PlotTab, self).update()
         s = self.status
-        self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/170e6
+        self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
         self.mcu_timestamp = s.mcu_timestamp
         self.series.append(self.t_seconds, getattr(s, self.combo_box.currentText()))
         if len(self.series) > 500:
@@ -302,7 +307,7 @@ class PlotTab2(MotorTab):
         self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.field_names = motor_manager.motors()[0]["help"].get().split('\n')
+        self.field_names = current_motor()["help"].get().split('\n')
         self.combo_box.addItems(self.field_names)
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
@@ -327,16 +332,16 @@ class PlotTab2(MotorTab):
         s = motor_manager.read()[0]
         self.mcu_timestamp = s.mcu_timestamp
         self.t_seconds = 0.0
-      #  val = motor_manager.motors()[0][self.combo_box.currentText()].get()
+      #  val = current_motor()[self.combo_box.currentText()].get()
       #  self.series.append(0, getattr(s, self.combo_box.currentText()))
 
 
     def update(self):
         super(PlotTab2, self).update()
         s = self.status
-        self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/170e6
+        self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
         self.mcu_timestamp = s.mcu_timestamp
-        val = motor_manager.motors()[0][self.combo_box.currentText()].get()
+        val = current_motor()[self.combo_box.currentText()].get()
         try:
             self.series.append(self.t_seconds, float(val))
             if len(self.series) > 500:
@@ -362,7 +367,7 @@ class VelocityTab(MotorTab):
         #self.widget.number_widget.editingFinished.connect(self.position_update)
         self.widget.slider.setMinimum(-1000)
         self.widget.slider.setMaximum(1000)
-        self.widget.slider.setPageStep(50)       
+        self.widget.slider.setPageStep(50)
         self.widget.signal.connect(self.velocity_update)
 
         self.chart = QChart()
@@ -387,7 +392,7 @@ class VelocityTab(MotorTab):
         self.kp = ParameterEdit("vkp","kp")
         self.ki = ParameterEdit("vki","ki")
         self.max = ParameterEdit("vmax","current limit")
-        self.max.signal.connect(lambda val: motor_manager.motors()[0]["vki_limit"].set(str(val)))
+        self.max.signal.connect(lambda val: current_motor()["vki_limit"].set(str(val)))
         self.accel = ParameterEdit("vacceleration_limit","acceleration limit")
         self.imax = ParameterEdit("imax","voltage limit")
         self.imax.signal.connect(self.set_imax)
@@ -412,7 +417,7 @@ class VelocityTab(MotorTab):
 
     def update(self):
         super(VelocityTab, self).update()
-        dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/170e6
+        dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
         self.t_seconds += dt
         self.mcu_timestamp = self.status.mcu_timestamp
         dp = self.status.motor_position - self.motor_position
@@ -440,10 +445,10 @@ class VelocityTab(MotorTab):
         motor_manager.write_saved_commands()
 
     def set_imax(self, val):
-        motor_manager.motors()[0]["imax"].set(str(val))
-        motor_manager.motors()[0]["idmax"].set(str(val))
-        motor_manager.motors()[0]["iki_limit"].set(str(val))
-        motor_manager.motors()[0]["idki_limit"].set(str(val))
+        current_motor()["imax"].set(str(val))
+        current_motor()["idmax"].set(str(val))
+        current_motor()["iki_limit"].set(str(val))
+        current_motor()["idki_limit"].set(str(val))
 
     def unpause(self):
         self.kp.refresh_value()
@@ -472,7 +477,7 @@ class LogTab(MotorTab):
     def update(self):
         super(LogTab, self).update()
         while True:
-            log = motor_manager.motors()[0]["log"].get()
+            log = current_motor()["log"].get()
             if log == "log end":
                 break
             else:
@@ -503,7 +508,7 @@ class CalibrateTab(MotorTab):
         super(CalibrateTab, self).update()
         self.index_offset.update()
         self.current_d.update()
-    
+
     def phase_lock(self):
         print("phase lock")
         motor_manager.set_command_mode(motor.ModeDesired.PhaseLock)
@@ -527,11 +532,8 @@ class MainWindow(QMainWindow):
         for m in motors:
             actions.append(self.motor_menu.addAction(m.name()))
             print(m.name())
-            actions[-1].triggered.connect(lambda: self.connect_motor(m.name()))
+        self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
         self.connect_motor(motors[0].name())
-        print(actions)
-        
-
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -564,10 +566,12 @@ class MainWindow(QMainWindow):
             self.showFullScreen()
 
     def connect_motor(self, name):
+         global cpu_frequency
          print("Connecting motor " + name)
          motor_manager.get_motors_by_name([name])
          motor_manager.set_auto_count()
-         self.setWindowTitle(name + " sn:" + motor_manager.motors()[0].serial_number())
+         self.setWindowTitle(name + " sn:" + current_motor().serial_number())
+         cpu_frequency = current_motor().get_cpu_frequency()
 
     def new_tab(self, index):
         #print("last tab " + str(index) + " " + self.last_tab.name)
@@ -595,21 +599,21 @@ class CurrentTuningTab(MotorTab):
         self.amplitude = NumberEditSlider("amplitude")
         self.amplitude.slider.setMinimum(-100)
         self.amplitude.slider.setMaximum(100)
-        self.amplitude.slider.setPageStep(5)       
+        self.amplitude.slider.setPageStep(5)
         self.amplitude.signal.connect(self.amplitude_update)
         layout.addWidget(self.amplitude)
 
         self.bias = NumberEditSlider("bias")
         self.bias.slider.setMinimum(-100)
         self.bias.slider.setMaximum(100)
-        self.bias.slider.setPageStep(5)       
+        self.bias.slider.setPageStep(5)
         self.bias.signal.connect(self.bias_update)
         layout.addWidget(self.bias)
 
         self.frequency = NumberEditSlider("frequency")
         self.frequency.slider.setMinimum(0)
         self.frequency.slider.setMaximum(10000)
-        self.frequency.slider.setPageStep(50)       
+        self.frequency.slider.setPageStep(50)
         self.frequency.signal.connect(self.frequency_update)
         layout.addWidget(self.frequency)
 
@@ -620,13 +624,13 @@ class CurrentTuningTab(MotorTab):
 
         parameter_layout = QGridLayout()
         self.kp = ParameterEdit("ikp")
-        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idkp"].set(str(val)))
+        self.kp.signal.connect(lambda val: current_motor()["idkp"].set(str(val)))
         self.ki = ParameterEdit("iki")
-        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idki"].set(str(val)))
+        self.kp.signal.connect(lambda val: current_motor()["idki"].set(str(val)))
         self.ki_limit = ParameterEdit("iki_limit")
-        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idki_limit"].set(str(val)))
+        self.kp.signal.connect(lambda val: current_motor()["idki_limit"].set(str(val)))
         self.command_max = ParameterEdit("imax")
-        self.kp.signal.connect(lambda val: motor_manager.motors()[0]["idmax"].set(str(val)))
+        self.kp.signal.connect(lambda val: current_motor()["idmax"].set(str(val)))
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.ki,0,1)
         parameter_layout.addWidget(self.ki_limit,1,0)
@@ -639,7 +643,7 @@ class CurrentTuningTab(MotorTab):
 
     def update(self):
         super(CurrentTuningTab, self).update()
-        self.text.setPlainText(motor_manager.motors()[0].get_fast_log())
+        self.text.setPlainText(current_motor().get_fast_log())
 
     def unpause(self):
         self.kp.refresh_value()
@@ -651,7 +655,7 @@ class CurrentTuningTab(MotorTab):
     def command_update(self):
         print(self.command)
         motor_manager.write([self.command])
-        
+
     def amplitude_update(self):
         self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
         self.command_update()
@@ -682,21 +686,21 @@ class PositionTuningTab(MotorTab):
         self.amplitude = NumberEditSlider("amplitude")
         self.amplitude.slider.setMinimum(-100)
         self.amplitude.slider.setMaximum(100)
-        self.amplitude.slider.setPageStep(5)       
+        self.amplitude.slider.setPageStep(5)
         self.amplitude.signal.connect(self.amplitude_update)
         layout.addWidget(self.amplitude)
 
         self.bias = NumberEditSlider("bias")
         self.bias.slider.setMinimum(-100)
         self.bias.slider.setMaximum(100)
-        self.bias.slider.setPageStep(5)       
+        self.bias.slider.setPageStep(5)
         self.bias.signal.connect(self.bias_update)
         layout.addWidget(self.bias)
 
         self.frequency = NumberEditSlider("frequency")
         self.frequency.slider.setMinimum(0)
         self.frequency.slider.setMaximum(100)
-        self.frequency.slider.setPageStep(5)       
+        self.frequency.slider.setPageStep(5)
         self.frequency.signal.connect(self.frequency_update)
         layout.addWidget(self.frequency)
 
@@ -730,7 +734,7 @@ class PositionTuningTab(MotorTab):
     def command_update(self):
         print(self.command)
         motor_manager.write([self.command])
-        
+
     def amplitude_update(self):
         self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
         self.command_update()
