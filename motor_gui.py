@@ -833,19 +833,20 @@ class PositionTuningTab(MotorTab):
         motor_manager.write([self.command])
 
     def amplitude_update(self):
-        self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
+        self.command.position_tuning.amplitude = float(self.amplitude.number_widget.text())
+        print("amplitude: {}".format(self.command.current_tuning.amplitude))
         self.command_update()
 
     def bias_update(self):
-        self.command.current_tuning.bias = float(self.bias.number_widget.text())
+        self.command.position_tuning.bias = float(self.bias.number_widget.text())
         self.command_update()
 
     def frequency_update(self):
-        self.command.current_tuning.frequency = float(self.frequency.number_widget.text())
+        self.command.position_tuning.frequency = float(self.frequency.number_widget.text())
         self.command_update()
 
     def mode_update(self, selection):
-        self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
+        self.command.position_tuning.mode = int(motor.TuningMode.__members__[selection])
         self.command_update()
 
 app = QApplication(sys.argv)
