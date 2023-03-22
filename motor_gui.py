@@ -3,7 +3,7 @@
 import sys
 
 
-from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal
+from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF
 from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
@@ -24,6 +24,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
 import motor
+import numpy as np
+from io import StringIO
+from scipy.fft import fft, fftfreq
 
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -596,6 +599,7 @@ class CurrentTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(CurrentTuningTab, self).__init__(*args, **kwargs)
 
+        self.update_time = 50
         self.name = "current_tuning"
         self.command = motor.Command()
         self.command.mode_desired = motor.ModeDesired.CurrentTuning
@@ -643,13 +647,100 @@ class CurrentTuningTab(MotorTab):
         parameter_layout.addWidget(self.command_max,1,1)
         layout.addLayout(parameter_layout)
 
-        self.text = QPlainTextEdit()
-        layout.addWidget(self.text)
+        # self.text = QPlainTextEdit()
+        # layout.addWidget(self.text)
+
+        self.chart = QChart()
+        self.chart_view = QChartView(self.chart)
+        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+        self.series = QLineSeries()
+        self.series.setUseOpenGL(True)
+        self.series.setName("desired")
+        self.series2 = QLineSeries()
+        self.series2.setUseOpenGL(True)
+        self.series2.setName("measured (filt)")
+        self.chart.addSeries(self.series)
+        self.chart.addSeries(self.series2)
+        self.axis_x = QValueAxis()
+        self.axis_x.setTickCount(10)
+        self.axis_x.setTitleText("time (ms)")
+        self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
+        self.series.attachAxis(self.axis_x)
+        self.series2.attachAxis(self.axis_x)
+        self.axis_y = QValueAxis()
+        self.axis_y.setTickCount(10)
+        self.axis_y.setTitleText("current (A)")
+        self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
+        self.series.attachAxis(self.axis_y)
+        self.series2.attachAxis(self.axis_y)
+        self.axis_y.setRange(-100,100)
+
+        layout.addWidget(self.chart_view)
+
+        measure_layout = QGridLayout()
+        self.freq_des = NumberDisplay("frequency desired")
+        measure_layout.addWidget(self.freq_des, 0, 0)
+        self.freq_meas = NumberDisplay("frequency measured")
+        measure_layout.addWidget(self.freq_meas, 0, 1)
+        self.phase = NumberDisplay("phase shift")
+        measure_layout.addWidget(self.phase, 1, 0)
+        self.mag_des = NumberDisplay("magnitude des")
+        measure_layout.addWidget(self.mag_des, 1, 1)
+        self.mag = NumberDisplay("magnitude")
+        measure_layout.addWidget(self.mag, 1, 2)
+        layout.addLayout(measure_layout)
         self.setLayout(layout)
+        #t = np.matrix(np.linspace(0,94*(1/50000),95))
+        self.freq =np.matrix(np.linspace(0,10000,10000//5+1)).transpose()
+        #self.ei = np.exp(1j*self.freq*t*2*np.pi)
 
     def update(self):
         super(CurrentTuningTab, self).update()
-        self.text.setPlainText(current_motor().get_fast_log())
+        fast_log = current_motor().get_fast_log()
+        #self.text.setPlainText(fast_log)
+
+
+
+        try:
+            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1)
+            t_seconds = data["timestamp"]/cpu_frequency*1000
+            t_seconds -= t_seconds[0]
+            self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
+            iq_des = np.matrix(data["iq_des"]).transpose()
+            iq_meas_filt = np.matrix(data["iq_meas_filt"]).transpose()
+            dt = (t_seconds[1] - t_seconds[0])/1000
+
+            #fmeas = fft(iq_des)
+            fmeas = self.ei*iq_des
+            
+            fmeasi = np.argmax(abs(fmeas))
+            #freq = fftfreq(iq_des.size, dt)
+            self.freq_des.setNumber(self.freq[fmeasi])
+            mag_des = np.abs(fmeas[fmeasi])/iq_des.size*2
+            self.mag_des.setNumber(mag_des)
+            phas_des = np.angle(fmeas[fmeasi])
+
+            fmeas_meas = self.ei*iq_meas_filt
+            fmeas_mi = np.argmax(abs(fmeas_meas))
+            self.freq_meas.setNumber(self.freq[fmeas_mi])
+            mag_meas = np.abs(fmeas_meas[fmeasi])/iq_des.size*2
+            phas_meas = np.angle(fmeas_meas[fmeasi])
+
+            self.phase.setNumber(-(phas_meas - phas_des)*180/np.pi)
+            self.mag.setNumber(mag_meas/mag_des)
+
+            xy = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(iq_des)))]
+            self.series.replace(xy) #append(self.t_seconds, float(val))
+            xy2 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(iq_meas_filt)))] # abs(fmeas)))]#iq_meas_filt))]
+            self.series2.replace(xy2)
+            min_y = min(min([d.y() for d in self.series.pointsVector()]), min([d.y() for d in self.series2.pointsVector()]))
+            max_y = max(max([d.y() for d in self.series.pointsVector()]), max([d.y() for d in self.series2.pointsVector()]))
+            self.axis_y.setMin(min_y)
+            self.axis_y.setMax(max_y)
+            self.axis_x.setMin(min(t_seconds))
+            self.axis_x.setMax(max(t_seconds))
+        except ValueError:
+            pass
 
     def unpause(self):
         self.kp.refresh_value()
@@ -742,19 +833,20 @@ class PositionTuningTab(MotorTab):
         motor_manager.write([self.command])
 
     def amplitude_update(self):
-        self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
+        self.command.position_tuning.amplitude = float(self.amplitude.number_widget.text())
+        print("amplitude: {}".format(self.command.current_tuning.amplitude))
         self.command_update()
 
     def bias_update(self):
-        self.command.current_tuning.bias = float(self.bias.number_widget.text())
+        self.command.position_tuning.bias = float(self.bias.number_widget.text())
         self.command_update()
 
     def frequency_update(self):
-        self.command.current_tuning.frequency = float(self.frequency.number_widget.text())
+        self.command.position_tuning.frequency = float(self.frequency.number_widget.text())
         self.command_update()
 
     def mode_update(self, selection):
-        self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
+        self.command.position_tuning.mode = int(motor.TuningMode.__members__[selection])
         self.command_update()
 
 app = QApplication(sys.argv)
