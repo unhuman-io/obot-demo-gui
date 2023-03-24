@@ -88,7 +88,7 @@ class APIBool(QWidget):
         super(APIBool, self).__init__(*args, **kwargs)
 
         if description is None:
-            description = nameprint("{}=1".format(self.name))
+            description = name
         self.layout = QHBoxLayout()
         self.name = name
         self.checkbox = QCheckBox()
@@ -109,7 +109,21 @@ class APIBool(QWidget):
             current_motor()[self.name] = str(0)
             print("{}=0".format(self.name))
 
+class APIDir(APIBool):
+    def __init__(self, *args, **kwargs):
+        super(APIDir, self).__init__(*args, **kwargs)
 
+    def update(self):
+        val = current_motor()[self.name].get()
+        self.checkbox.setChecked(val == 1 or val == 0)
+
+    def clicked(self, on):
+        if on:
+            current_motor()[self.name] = str(1)
+            print("{}=1".format(self.name))
+        else:
+            current_motor()[self.name] = str(-1)
+            print("{}=0".format(self.name)) 
 
 class NumberEditSlider(NumberEdit):
     def __init__(self, *args, **kwargs):
@@ -554,28 +568,33 @@ class CalibrateTab(MotorTab):
         self.obias = APIEdit("obias", "output bias (rad)")
         self.obias.signal.connect(self.obias_set)
         self.oposition = NumberDisplay("output position (rad)")
-
+        self.odir = APIDir("odir", "output position dir")
         olayout = QHBoxLayout()
         olayout.addWidget(self.obias)
         olayout.addWidget(self.oposition)
+        olayout.addWidget(self.odir)
         layout.addLayout(olayout)
 
         self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)")
         self.mbias.signal.connect(self.mbias_set)
         self.mposition_raw = APIDisplay("motor_position_raw", "motor abs position (rad)")
         self.mposition = NumberDisplay("motor position (rad)")
+        self.mdir = APIDir("mdir", "motor position dir")
 
         mlayout = QHBoxLayout()
         mlayout.addWidget(self.mbias)
         mlayout.addWidget(self.mposition_raw)
         mlayout.addWidget(self.mposition)
+        mlayout.addWidget(self.mdir)
         layout.addLayout(mlayout)
 
         self.tbias = APIEdit("tbias", "torque bias (Nm)")
         self.torque = NumberDisplay("torque (Nm)")
+        self.tdir = APIDir("tdir", "torque dir")
         tlayout = QHBoxLayout()
         tlayout.addWidget(self.tbias)
         tlayout.addWidget(self.torque)
+        tlayout.addWidget(self.tdir)
         layout.addLayout(tlayout)
 
         self.setLayout(layout)
@@ -586,13 +605,16 @@ class CalibrateTab(MotorTab):
         self.current_d.update()
         self.oposition.setNumber(self.status.joint_position)
         self.mposition.setNumber(self.status.motor_position)
+        self.odir.update()
         self.torque.setNumber(self.status.torque)
         self.mposition_raw.update()
         self.obias.update()
         self.mbias.update()
+        self.mdir.update()
         self.phase_mode.update()
         self.position_limits_disable.update()
         self.tbias.update()
+        self.tdir.update()
 
     def phase_lock(self):
         print("phase lock")
