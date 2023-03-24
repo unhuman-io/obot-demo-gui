@@ -26,7 +26,6 @@ from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
 import motor
 import numpy as np
 from io import StringIO
-from scipy.fft import fft, fftfreq
 
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -58,6 +57,9 @@ class NumberEdit(QWidget):
 
     def setNumber(self, number):
         self.number_widget.setText(str(number))
+
+    def getNumber(self):
+        return float(self.number_widget.text())
 
     def editingFinished(self):
         self.signal.emit(float(self.number_widget.text()))
@@ -498,8 +500,12 @@ class CalibrateTab(MotorTab):
         self.index_offset = APIDisplay("index_offset_measured")
         layout.addWidget(self.index_offset)
 
-        self.current_d = APIDisplay("id")
+        self.current_d = APIDisplay("id", "id measured (A)")
         layout.addWidget(self.current_d)
+
+        self.phase_lock_current = NumberEdit("phase lock current (A)")
+        self.phase_lock_current.setNumber(current_motor()["startup_phase_lock_current"])
+        layout.addWidget(self.phase_lock_current)
 
         self.button = QPushButton("phase_lock")
         self.button.clicked.connect(self.phase_lock)
@@ -515,7 +521,7 @@ class CalibrateTab(MotorTab):
     def phase_lock(self):
         print("phase lock")
         motor_manager.set_command_mode(motor.ModeDesired.PhaseLock)
-        motor_manager.set_command_current([10])
+        motor_manager.set_command_current([self.phase_lock_current.getNumber()])
         motor_manager.write_saved_commands()
 
 
@@ -606,21 +612,21 @@ class CurrentTuningTab(MotorTab):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self.amplitude = NumberEditSlider("amplitude")
+        self.amplitude = NumberEditSlider("amplitude (A)")
         self.amplitude.slider.setMinimum(-100)
         self.amplitude.slider.setMaximum(100)
         self.amplitude.slider.setPageStep(5)
         self.amplitude.signal.connect(self.amplitude_update)
         layout.addWidget(self.amplitude)
 
-        self.bias = NumberEditSlider("bias")
+        self.bias = NumberEditSlider("bias (A)")
         self.bias.slider.setMinimum(-100)
         self.bias.slider.setMaximum(100)
         self.bias.slider.setPageStep(5)
         self.bias.signal.connect(self.bias_update)
         layout.addWidget(self.bias)
 
-        self.frequency = NumberEditSlider("frequency")
+        self.frequency = NumberEditSlider("frequency (Hz)")
         self.frequency.slider.setMinimum(0)
         self.frequency.slider.setMaximum(10000)
         self.frequency.slider.setPageStep(50)
@@ -633,18 +639,23 @@ class CurrentTuningTab(MotorTab):
         layout.addWidget(self.mode)
 
         parameter_layout = QGridLayout()
-        self.kp = ParameterEdit("ikp")
+        self.kp = ParameterEdit("ikp", "kp (V/A)")
         self.kp.signal.connect(lambda val: current_motor()["idkp"].set(str(val)))
-        self.ki = ParameterEdit("iki")
-        self.kp.signal.connect(lambda val: current_motor()["idki"].set(str(val)))
-        self.ki_limit = ParameterEdit("iki_limit")
-        self.kp.signal.connect(lambda val: current_motor()["idki_limit"].set(str(val)))
-        self.command_max = ParameterEdit("imax")
-        self.kp.signal.connect(lambda val: current_motor()["idmax"].set(str(val)))
+        self.ki = ParameterEdit("iki", "ki (V/(A*T))")
+        self.ki.signal.connect(lambda val: current_motor()["idki"].set(str(val)))
+        self.ki_limit = ParameterEdit("iki_limit", "ki_limit (V)")
+        self.ki_limit.signal.connect(lambda val: current_motor()["idki_limit"].set(str(val)))
+        self.command_max = ParameterEdit("imax", "command_max (V)")
+        self.command_max.signal.connect(lambda val: current_motor()["idmax"].set(str(val)))
+        self.filter = ParameterEdit("iq_filter", "current_filter (Hz)")
+        self.filter.signal.connect(lambda val: current_motor()["id_filter"].set(str(val)))
+        self.pwm_mult = ParameterEdit("pwm_mult")
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.ki,0,1)
         parameter_layout.addWidget(self.ki_limit,1,0)
         parameter_layout.addWidget(self.command_max,1,1)
+        parameter_layout.addWidget(self.filter,2,0)
+        parameter_layout.addWidget(self.pwm_mult,2,1)
         layout.addLayout(parameter_layout)
 
         # self.text = QPlainTextEdit()
@@ -780,21 +791,21 @@ class PositionTuningTab(MotorTab):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self.amplitude = NumberEditSlider("amplitude")
+        self.amplitude = NumberEditSlider("amplitude (rad)")
         self.amplitude.slider.setMinimum(-100)
         self.amplitude.slider.setMaximum(100)
         self.amplitude.slider.setPageStep(5)
         self.amplitude.signal.connect(self.amplitude_update)
         layout.addWidget(self.amplitude)
 
-        self.bias = NumberEditSlider("bias")
+        self.bias = NumberEditSlider("bias (rad)")
         self.bias.slider.setMinimum(-100)
         self.bias.slider.setMaximum(100)
         self.bias.slider.setPageStep(5)
         self.bias.signal.connect(self.bias_update)
         layout.addWidget(self.bias)
 
-        self.frequency = NumberEditSlider("frequency")
+        self.frequency = NumberEditSlider("frequency (Hz)")
         self.frequency.slider.setMinimum(0)
         self.frequency.slider.setMaximum(100)
         self.frequency.slider.setPageStep(5)
@@ -807,10 +818,10 @@ class PositionTuningTab(MotorTab):
         layout.addWidget(self.mode)
 
         parameter_layout = QGridLayout()
-        self.kp = ParameterEdit("kp")
-        self.kd = ParameterEdit("kd")
+        self.kp = ParameterEdit("kp", "kp (A/rad)")
+        self.kd = ParameterEdit("kd", "kd (A*s/rad)")
         #self.ki_limit = ParameterEdit("ki_limit")
-        self.command_max = ParameterEdit("max")
+        self.command_max = ParameterEdit("max", "command max (A)")
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.kd,0,1)
         #parameter_layout.addWidget(self.ki_limit,1,0)
