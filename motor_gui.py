@@ -132,7 +132,7 @@ class APIBool(QWidget):
 
     def update(self):
         val = current_motor()[self.name].get()
-        self.checkbox.setChecked(bool(val))
+        self.checkbox.setChecked(val != "0")
     
     def clicked(self, on):
         if on:
@@ -147,8 +147,9 @@ class APIDir(APIBool):
         super(APIDir, self).__init__(*args, **kwargs)
 
     def update(self):
-        val = current_motor()[self.name].get()
-        self.checkbox.setChecked(val == 1 or val == 0)
+        val = float(current_motor()[self.name].get())
+        status = val == 1.0 or val == 0.0
+        self.checkbox.setChecked(status)
 
     def clicked(self, on):
         if on:
@@ -607,7 +608,7 @@ class CalibrateTab(MotorTab):
         layout.addLayout(mode_layout)
 
         boollayout = QHBoxLayout()
-        self.position_limits_disable = APIBool("position_limits_disable", "position limits disable")
+        self.position_limits_disable = APIBool("disable_position_limits", "disable position limits")
         self.phase_mode = APIBool("phase_mode", "phase mode", "fast_loop_param.phase_mode")
         boollayout.addWidget(self.position_limits_disable)
         boollayout.addWidget(self.phase_mode)
@@ -656,7 +657,10 @@ class CalibrateTab(MotorTab):
         self.mposition.setNumber(self.status.motor_position)
         self.odir.update()
         self.torque.setNumber(self.status.torque)
-        self.mposition_raw.update()
+        mposition_raw = float(current_motor()[self.mposition_raw.name].get()) % 2*np.pi
+        if mposition_raw > np.pi:
+            mposition_raw -= 2*np.pi
+        self.mposition_raw.setNumber(mposition_raw)
         self.obias.update()
         self.mbias.update()
         self.mdir.update()
