@@ -38,17 +38,25 @@ def current_motor():
 
 cpu_frequency = 170e6
 
+def mode_open():
+    print("open")
+    motor_manager.set_command_mode(motor.ModeDesired.Open)
+    motor_manager.write_saved_commands()
 
 class NumberEdit(QWidget):
     signal = pyqtSignal(float)
-    def __init__(self, name, description=None, value=0):
+    def __init__(self, name, description=None, tooltip=None, value=0):
         super(NumberEdit, self).__init__()
 
         if description is None:
             description = name
         self.layout = QHBoxLayout()
         self.name = name
-        self.layout.addWidget(QLabel(description))
+        self.label = QLabel(description)
+        if tooltip is None:
+            tooltip = name
+        self.label.setToolTip(tooltip)
+        self.layout.addWidget(self.label)
         self.number_widget = QLineEdit()
         self.number_widget.setValidator(QDoubleValidator())
         self.setNumber(value)
@@ -57,7 +65,15 @@ class NumberEdit(QWidget):
         self.setLayout(self.layout)
 
     def setNumber(self, number):
-        self.number_widget.setText(str(number))
+        num = str(number)
+        try:
+            num = str(int(num))
+        except ValueError:
+            try:
+                num = "{:.4f}".format(float(num))
+            except ValueError:
+                pass
+        self.number_widget.setText(num)
 
     def getNumber(self):
         return float(self.number_widget.text())
@@ -70,21 +86,32 @@ class NumberDisplay(NumberEdit):
         super(NumberDisplay, self).__init__(*args, **kwargs)
         self.number_widget.setReadOnly(True)
 
-class APIDisplay(NumberDisplay):
-    def update(self):
-        val = current_motor()[self.name].get()
-        self.number_widget.setText(val)
+
 
 class APIEdit(NumberEdit):
+    def __init__(self, name, description=None, tooltip=None, *args, **kwargs):
+        if tooltip is None:
+            tooltip = "api: " + name
+        else:
+            tooltip = "api: {}\n{}".format(name, tooltip)
+        super(APIEdit, self).__init__(name, description, tooltip, *args, **kwargs)
+        
     def editingFinished(self):
         current_motor()[self.name] = self.number_widget.text()
         return super().editingFinished()
     
     def update(self):
-        pass
+        if not self.number_widget.hasFocus():
+            val = current_motor()[self.name].get()
+            self.number_widget.setText(val)
+
+class APIDisplay(APIEdit):
+    def __init__(self, *args, **kwargs):
+        super(APIDisplay, self).__init__(*args, **kwargs)
+        self.number_widget.setReadOnly(True)
 
 class APIBool(QWidget):
-    def __init__(self, name, description=None, *args, **kwargs):
+    def __init__(self, name, description=None, tooltip=None, *args, **kwargs):
         super(APIBool, self).__init__(*args, **kwargs)
 
         if description is None:
@@ -93,7 +120,13 @@ class APIBool(QWidget):
         self.name = name
         self.checkbox = QCheckBox()
         self.layout.addWidget(self.checkbox)
-        self.layout.addWidget(QLabel(description))
+        self.label = QLabel(description)
+        if tooltip is None:
+            tooltip = "api: " + name
+        else:
+            tooltip = "api: {}\n{}".format(name, tooltip)
+        self.label.setToolTip(tooltip)
+        self.layout.addWidget(self.label)
         self.checkbox.clicked.connect(self.clicked)
         self.setLayout(self.layout)
 
@@ -380,6 +413,8 @@ class PlotTab2(MotorTab):
         self.series.attachAxis(self.axis_y)
         self.axis_y.setRange(-100,100)
 
+        self.combo_box.currentIndexChanged.connect(lambda: self.series.removeAll())
+
         s = motor_manager.read()[0]
         self.mcu_timestamp = s.mcu_timestamp
         self.t_seconds = 0.0
@@ -549,37 +584,51 @@ class CalibrateTab(MotorTab):
         self.current_d = APIDisplay("id", "id measured (A)")
         layout.addWidget(self.current_d)
 
-        self.phase_lock_current = NumberEdit("phase lock current (A)")
+        self.phase_lock_current = NumberEdit("phase lock current (A)", tooltip="command.current_desired")
         self.phase_lock_current.setNumber(current_motor()["startup_phase_lock_current"])
         layout.addWidget(self.phase_lock_current)
 
-        self.button = QPushButton("phase_lock")
+        mode_layout = QHBoxLayout()
+        self.button = QPushButton("phase lock")
+        self.button.setToolTip("command.mode_desired = PHASE_LOCK")
         self.button.clicked.connect(self.phase_lock)
-        layout.addWidget(self.button)
+        mode_layout.addWidget(self.button)
+
+        self.obutton = QPushButton("open")
+        self.obutton.setToolTip("command.mode_desired = OPEN")
+        self.obutton.clicked.connect(mode_open)
+        mode_layout.addWidget(self.obutton)
+
+        self.jbutton = QPushButton("joint position")
+        self.jbutton.setToolTip("command.mode_desired = JOINT_POSITION")
+        self.jbutton.clicked.connect(self.joint_position)
+        mode_layout.addWidget(self.jbutton)
+
+        layout.addLayout(mode_layout)
 
         boollayout = QHBoxLayout()
         self.position_limits_disable = APIBool("position_limits_disable", "position limits disable")
-        self.phase_mode = APIBool("phase_mode", "phase mode")
+        self.phase_mode = APIBool("phase_mode", "phase mode", "fast_loop_param.phase_mode")
         boollayout.addWidget(self.position_limits_disable)
         boollayout.addWidget(self.phase_mode)
         layout.addLayout(boollayout)
         
 
-        self.obias = APIEdit("obias", "output bias (rad)")
+        self.obias = APIEdit("obias", "output bias (rad)", "main_loop_param.output_encoder.bias")
         self.obias.signal.connect(self.obias_set)
-        self.oposition = NumberDisplay("output position (rad)")
-        self.odir = APIDir("odir", "output position dir")
+        self.oposition = NumberDisplay("output position (rad)", tooltip="status.joint_position")
+        self.odir = APIDir("odir", "output position dir", "main_loop_param.output_encoder.dir")
         olayout = QHBoxLayout()
         olayout.addWidget(self.obias)
         olayout.addWidget(self.oposition)
         olayout.addWidget(self.odir)
         layout.addLayout(olayout)
 
-        self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)")
+        self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)", "also calls set_startup_bias\nstartup_param.motor_encoder_bias")
         self.mbias.signal.connect(self.mbias_set)
         self.mposition_raw = APIDisplay("motor_position_raw", "motor abs position (rad)")
-        self.mposition = NumberDisplay("motor position (rad)")
-        self.mdir = APIDir("mdir", "motor position dir")
+        self.mposition = NumberDisplay("motor position (rad)", tooltip="status.motor_position")
+        self.mdir = APIDir("mdir", "motor position dir", "fast_loop_param.motor_encoder.dir")
 
         mlayout = QHBoxLayout()
         mlayout.addWidget(self.mbias)
@@ -588,9 +637,9 @@ class CalibrateTab(MotorTab):
         mlayout.addWidget(self.mdir)
         layout.addLayout(mlayout)
 
-        self.tbias = APIEdit("tbias", "torque bias (Nm)")
-        self.torque = NumberDisplay("torque (Nm)")
-        self.tdir = APIDir("tdir", "torque dir")
+        self.tbias = APIEdit("tbias", "torque bias (Nm)", "main_loop_param.torque_sensor.bias")
+        self.torque = NumberDisplay("torque (Nm)", tooltip="status.torque")
+        self.tdir = APIDir("tdir", "torque dir", "main_loop_param.torque_sensor.dir")
         tlayout = QHBoxLayout()
         tlayout.addWidget(self.tbias)
         tlayout.addWidget(self.torque)
@@ -621,6 +670,13 @@ class CalibrateTab(MotorTab):
         motor_manager.set_command_mode(motor.ModeDesired.PhaseLock)
         motor_manager.set_command_current([self.phase_lock_current.getNumber()])
         motor_manager.write_saved_commands()
+
+    def joint_position(self):
+        print("joint position")
+        motor_manager.set_commands([motor.Command()])
+        motor_manager.set_command_mode(motor.ModeDesired.JointPosition)
+        motor_manager.write_saved_commands()
+
 
     def mbias_set(self):
         print("setting mbias")
