@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QSlider,
     QComboBox,
     QMenuBar,
+    QCheckBox,
     QMenu,
     QPlainTextEdit,
 )
@@ -75,8 +76,39 @@ class APIDisplay(NumberDisplay):
         self.number_widget.setText(val)
 
 class APIEdit(NumberEdit):
+    def editingFinished(self):
+        current_motor()[self.name] = self.number_widget.text()
+        return super().editingFinished()
+    
     def update(self):
         pass
+
+class APIBool(QWidget):
+    def __init__(self, name, description=None, *args, **kwargs):
+        super(APIBool, self).__init__(*args, **kwargs)
+
+        if description is None:
+            description = nameprint("{}=1".format(self.name))
+        self.layout = QHBoxLayout()
+        self.name = name
+        self.checkbox = QCheckBox()
+        self.layout.addWidget(self.checkbox)
+        self.layout.addWidget(QLabel(description))
+        self.checkbox.clicked.connect(self.clicked)
+        self.setLayout(self.layout)
+
+    def update(self):
+        val = current_motor()[self.name].get()
+        self.checkbox.setChecked(bool(val))
+    
+    def clicked(self, on):
+        if on:
+            current_motor()[self.name] = str(1)
+            print("{}=1".format(self.name))
+        else:
+            current_motor()[self.name] = str(0)
+            print("{}=0".format(self.name))
+
 
 
 class NumberEditSlider(NumberEdit):
@@ -511,12 +543,56 @@ class CalibrateTab(MotorTab):
         self.button.clicked.connect(self.phase_lock)
         layout.addWidget(self.button)
 
+        boollayout = QHBoxLayout()
+        self.position_limits_disable = APIBool("position_limits_disable", "position limits disable")
+        self.phase_mode = APIBool("phase_mode", "phase mode")
+        boollayout.addWidget(self.position_limits_disable)
+        boollayout.addWidget(self.phase_mode)
+        layout.addLayout(boollayout)
+        
+
+        self.obias = APIEdit("obias", "output bias (rad)")
+        self.obias.signal.connect(self.obias_set)
+        self.oposition = NumberDisplay("output position (rad)")
+
+        olayout = QHBoxLayout()
+        olayout.addWidget(self.obias)
+        olayout.addWidget(self.oposition)
+        layout.addLayout(olayout)
+
+        self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)")
+        self.mbias.signal.connect(self.mbias_set)
+        self.mposition_raw = APIDisplay("motor_position_raw", "motor abs position (rad)")
+        self.mposition = NumberDisplay("motor position (rad)")
+
+        mlayout = QHBoxLayout()
+        mlayout.addWidget(self.mbias)
+        mlayout.addWidget(self.mposition_raw)
+        mlayout.addWidget(self.mposition)
+        layout.addLayout(mlayout)
+
+        self.tbias = APIEdit("tbias", "torque bias (Nm)")
+        self.torque = NumberDisplay("torque (Nm)")
+        tlayout = QHBoxLayout()
+        tlayout.addWidget(self.tbias)
+        tlayout.addWidget(self.torque)
+        layout.addLayout(tlayout)
+
         self.setLayout(layout)
 
     def update(self):
         super(CalibrateTab, self).update()
         self.index_offset.update()
         self.current_d.update()
+        self.oposition.setNumber(self.status.joint_position)
+        self.mposition.setNumber(self.status.motor_position)
+        self.torque.setNumber(self.status.torque)
+        self.mposition_raw.update()
+        self.obias.update()
+        self.mbias.update()
+        self.phase_mode.update()
+        self.position_limits_disable.update()
+        self.tbias.update()
 
     def phase_lock(self):
         print("phase lock")
@@ -524,6 +600,12 @@ class CalibrateTab(MotorTab):
         motor_manager.set_command_current([self.phase_lock_current.getNumber()])
         motor_manager.write_saved_commands()
 
+    def mbias_set(self):
+        print("setting mbias")
+        current_motor()["set_startup_bias"].get()
+
+    def obias_set(self):
+        pass
 
 class MainWindow(QMainWindow):
 
