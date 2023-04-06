@@ -26,7 +26,7 @@ jobs:
     - name: install dependencies
       run: |
         apt-get update
-        apt-get install -y curl sudo virtualenvwrapper
+        apt-get install -y curl sudo virtualenvwrapper zip
         curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-obot.sh > install-obot.sh
         chmod +x install-obot.sh
         ./install-obot.sh --no-driver
@@ -35,10 +35,12 @@ jobs:
         mkvirtualenv build || true
         echo "done2"
         workon build
+        pip install -U pip
         pip install -r requirements.txt
         pip install pyinstaller
         add2virtualenv /usr/share/motor-realtime/
-        pyinstaller motor_gui.py
+        pyinstaller --hidden-import=PyQt5.sip motor_gui.py
+        zip -r dist.zip dist/
     - name: Archive production artifacts
       uses: actions/upload-artifact@main
       with:
@@ -49,5 +51,5 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         files: |
-          ./artifacts_${{ matrix.distro }}.tgz
+          ./dist.zip
         tag: main
