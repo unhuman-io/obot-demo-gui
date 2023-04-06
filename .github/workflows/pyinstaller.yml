@@ -1,0 +1,53 @@
+name: pyinstaller build
+
+on:
+  push:
+  pull_request:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64]
+    runs-on: ubuntu-latest
+    container: 
+      image: ubuntu:22.04
+      options: --platform linux/${{ matrix.arch }}
+
+    steps:
+    - uses: actions/checkout@main
+      with:
+        fetch-depth: 1
+    - name: install dependencies
+      run: |
+        apt-get update
+        apt-get install -y curl sudo virtualenvwrapper
+        curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-obot.sh > install-obot.sh
+        chmod +x install-obot.sh
+        ./install-obot.sh --no-driver
+        . /usr/share/virtualenvwrapper/virtualenvwrapper.sh || true
+        echo "done"
+        mkvirtualenv build || true
+        echo "done2"
+        workon build
+        pip install -r requirements.txt
+        pip install pyinstaller
+        add2virtualenv /usr/share/motor-realtime/
+        pyinstaller motor_gui.py
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@main
+      with:
+        name: dist
+        path: dist
+    - uses: pyTooling/Actions/releaser@main
+      if: contains(github.ref, 'main')
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        files: |
+          ./artifacts_${{ matrix.distro }}.tgz
+        tag: main
