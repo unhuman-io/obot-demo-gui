@@ -280,6 +280,7 @@ class FaultTab(MotorTab):
     def update(self):
         super(FaultTab, self).update()
 
+        mask = current_motor().error_mask()
         self.faults[0].setText("mode: " + self.status.flags.mode.name.lower())
         faults = self.status.flags.error.bits
         for widget in self.faults:
@@ -288,6 +289,11 @@ class FaultTab(MotorTab):
                     widget.setStyleSheet("background-color: red")
                 else:
                     widget.setStyleSheet("background-color: green")
+            if widget.text() in mask.keys():
+                if not mask[widget.text()]:
+                    widget.setDisabled(True)
+                else:
+                    widget.setDisabled(False)
 
 class StatusTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -340,6 +346,7 @@ class PlotTab(MotorTab):
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
         self.combo_box.addItems(["motor_position", "joint_position", "iq", "torque"])
+        self.combo_box.currentIndexChanged.connect(lambda: self.series.removePoints(0,self.series.count()))
         self.layout.addWidget(self.combo_box)
         self.layout.addWidget(self.chart_view)
         self.setLayout(self.layout)
@@ -414,7 +421,7 @@ class PlotTab2(MotorTab):
         self.series.attachAxis(self.axis_y)
         self.axis_y.setRange(-100,100)
 
-        self.combo_box.currentIndexChanged.connect(lambda: self.series.removeAll())
+        self.combo_box.currentIndexChanged.connect(lambda: self.series.removePoints(0,self.series.count()))
 
         s = motor_manager.read()[0]
         self.mcu_timestamp = s.mcu_timestamp
@@ -585,6 +592,8 @@ class CalibrateTab(MotorTab):
         self.current_d = APIDisplay("id", "id measured (A)")
         layout.addWidget(self.current_d)
 
+        self.phase_lock_current_startup = APIDisplay("startup_phase_lock_current", "startup phase lock current (A)", tooltip="startup_param.phase_lock_current")
+        layout.addWidget(self.phase_lock_current_startup)
         self.phase_lock_current = NumberEdit("phase lock current (A)", tooltip="command.current_desired")
         self.phase_lock_current.setNumber(current_motor()["startup_phase_lock_current"])
         layout.addWidget(self.phase_lock_current)
@@ -647,12 +656,24 @@ class CalibrateTab(MotorTab):
         tlayout.addWidget(self.tdir)
         layout.addLayout(tlayout)
 
+        find_limits_layout = QHBoxLayout()
+        self.find_limits_velocity = NumberEdit("velocity", tooltip="command.velocity_desired")
+        find_limits_layout.addWidget(self.find_limits_velocity)
+        self.find_limits_current = NumberEdit("current", tooltip="command.current_desired")
+        find_limits_layout.addWidget(self.find_limits_current)
+        layout.addLayout(find_limits_layout)
+        self.find_limits_button = QPushButton("find limits")
+        self.find_limits_button.setToolTip("command.mode_desired = FIND_LIMITS")
+        self.find_limits_button.clicked.connect(self.find_limits)
+        layout.addWidget(self.find_limits_button)
+
         self.setLayout(layout)
 
     def update(self):
         super(CalibrateTab, self).update()
         self.index_offset.update()
         self.current_d.update()
+        self.phase_lock_current_startup.update()
         self.oposition.setNumber(self.status.joint_position)
         self.mposition.setNumber(self.status.motor_position)
         self.odir.update()
@@ -681,6 +702,12 @@ class CalibrateTab(MotorTab):
         motor_manager.set_command_mode(motor.ModeDesired.JointPosition)
         motor_manager.write_saved_commands()
 
+    def find_limits(self):
+        print("find limits")
+        motor_manager.set_command_mode(motor.ModeDesired.FindLimits)
+        motor_manager.set_command_current([self.find_limits_current.getNumber()])
+        motor_manager.set_command_velocity([self.find_limits_velocity.getNumber()])
+        motor_manager.write_saved_commands()
 
     def mbias_set(self):
         print("setting mbias")
@@ -982,25 +1009,32 @@ class PositionTuningTab(MotorTab):
         layout.addWidget(self.mode)
 
         parameter_layout = QGridLayout()
-        self.kp = ParameterEdit("kp", "kp (A/rad)")
-        self.kd = ParameterEdit("kd", "kd (A*s/rad)")
+        self.kp = APIEdit("kp", "kp (A/rad)", "main_loop_param.position_controller.position.kp")
+        self.kd = APIEdit("kd", "kd (A*s/rad)")
         #self.ki_limit = ParameterEdit("ki_limit")
-        self.command_max = ParameterEdit("max", "command max (A)")
+        self.command_max = APIEdit("max", "command max (A)")
+        self.output_filter = APIEdit("output_filter", "output filter (Hz)")
+        self.velocity_filter = APIEdit("velocity_filter", "velocity_filter (Hz)")
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.kd,0,1)
         #parameter_layout.addWidget(self.ki_limit,1,0)
         parameter_layout.addWidget(self.command_max,1,0)
+        parameter_layout.addWidget(self.output_filter,1,1)
+        parameter_layout.addWidget(self.velocity_filter,2,0)
         layout.addLayout(parameter_layout)
 
         self.setLayout(layout)
 
     def update(self):
         super(PositionTuningTab, self).update()
+  
 
     def unpause(self):
-        self.kp.refresh_value()
-        self.kd.refresh_value()
-        self.command_max.refresh_value()
+        self.kp.update()
+        self.kd.update()
+        self.command_max.update()
+        self.output_filter.update()
+        self.velocity_filter.update()
         return super().unpause()
 
     def command_update(self):
