@@ -24,16 +24,34 @@ from PyQt5.QtWidgets import (
     QFrame,
     QRadioButton
 )
+
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QLogValueAxis
+
+# Read the environment variables
+robot_config_path = os.getenv('ROBOT_CONFIG_PATH')
+obot_path = os.getenv('OBOT_PATH')
+
+if(robot_config_path is None or obot_path is None):
+    print("Please define ROBOT_CONFIG_PATH and OBOT_PATH environment variables."\
+          "Run the following command with the correct user path`export ROBOT_CONFIG_PATH=/home/user-path/project-x/tools/obot/robot01_parameters`")
+    sys.exit()
+
+# Assumes the .py files live in motorlib/scripts
+sys.path.append(obot_path + "/../motorlib/scripts")
+
 import motor
 import numpy as np
 from io import StringIO
 
+from motor_calibrator import MotorCalibrator
+import time
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 motor_manager = None
+
+
 
 def current_motor():
     return motor_manager.motors()[0]
