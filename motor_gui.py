@@ -34,7 +34,8 @@ obot_path = os.getenv('OBOT_PATH')
 
 if(robot_config_path is None or obot_path is None):
     print("Please define ROBOT_CONFIG_PATH and OBOT_PATH environment variables."\
-          "Run the following command with the correct user path`export ROBOT_CONFIG_PATH=/home/user-path/project-x/tools/obot/robot01_parameters`")
+          "Run the following commands with the correct user path`export ROBOT_CONFIG_PATH=/home/user-path/project-x/tools/obot/robot01_parameters` \
+           and `export OBOT_PATH=/home/user-path/obot-controller/obot-g474`")
     sys.exit()
 
 # Assumes the .py files live in motorlib/scripts
@@ -43,8 +44,7 @@ sys.path.append(obot_path + "/../motorlib/scripts")
 import motor
 import numpy as np
 from io import StringIO
-
-from motor_calibrator import MotorCalibrator
+from motor_handler import MotorHandler
 import time
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -480,7 +480,6 @@ class PlotTab(MotorTab):
         else:
             self.chart.length=500
 
-
     def update(self):
         super(PlotTab, self).update()
         s = self.status
@@ -694,6 +693,104 @@ class LogTab(MotorTab):
             else:
                 self.widget.appendPlainText(log)
 
+class BringupTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(BringupTab, self).__init__(*args, **kwargs)
+
+        self.name = "bringup"
+        self.updating_enabled = True
+        self.motor_handler = None
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        select_params_layout = QHBoxLayout()
+        self.config_combo_box = QComboBox()
+        files = os.listdir(robot_config_path)
+        self.config_combo_box.addItems(files)
+        select_params_layout.addWidget(self.config_combo_box)
+
+        self.fw_type_combo_box = QComboBox()
+        fw_types = ["motor_aksim", "motor_aksim_19_17", "motor_aksim_20_19"]
+        self.fw_type_combo_box.addItems(fw_types)
+        select_params_layout.addWidget(self.fw_type_combo_box)
+
+        self.board_type_combo_box = QComboBox()
+        board_types = ["MR0P", "MR0"]
+        self.board_type_combo_box.addItems(board_types)
+        select_params_layout.addWidget(self.board_type_combo_box)
+        layout.addLayout(select_params_layout)
+
+        buttons_layout = QHBoxLayout()
+        self.flash_param_btn = QPushButton("Flash params only")
+        self.flash_param_btn.setToolTip("Flash params")
+        self.flash_param_btn.clicked.connect(self.run_flash_params_routine)
+        buttons_layout.addWidget(self.flash_param_btn)
+
+        self.flash_fw_btn = QPushButton("Flash firmware only")
+        self.flash_fw_btn.setToolTip("Flash firmware")
+        self.flash_fw_btn.clicked.connect(self.run_flash_firmware_routine)
+        buttons_layout.addWidget(self.flash_fw_btn)
+
+        self.flash_all_btn = QPushButton("Flash all")
+        self.flash_all_btn.setToolTip("Flash firmware")
+        self.flash_all_btn.clicked.connect(self.run_flash_all_routine)
+        buttons_layout.addWidget(self.flash_all_btn)
+
+        layout.addLayout(buttons_layout)
+
+        self.setLayout(layout)
+
+    def update(self):
+        super(BringupTab, self).update()
+
+    def update_motor_handler(self):
+        self.fw_type = self.fw_type_combo_box.currentText()
+        self.board_type = self.board_type_combo_box.currentText()
+        self.motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
+        motor_info = {"fw_type": self.fw_type, "pcb_type": self.board_type, "sn":current_motor().serial_number()}
+        # name = self.motor_config
+        self.motor_handler = MotorHandler(self.motor_name, 
+                                            robot_config_path,
+                                            motor_info)
+
+    def run_flash_params_routine(self):
+        print("Flash param binary")
+        self.update_motor_handler()
+
+        # Disable updating while flashing the device since it will be nonresponsive in dfu mode
+        self.updating_enabled = False
+        self.motor_handler.run_flash_params_routine()
+        # Wait for the device to show up again
+        time.sleep(6)
+        # Reenable updates
+        self.updating_enabled = True
+
+    def run_flash_firmware_routine(self):
+        print("Flash firmware")
+        self.update_motor_handler()
+
+        # Disable updating while flashing the device since it will be nonresponsive in dfu mode
+        self.updating_enabled = False
+        self.motor_handler.run_flash_firmware_routine()
+        # Wait for the device to show up again
+        time.sleep(6)
+        # Reenable updates
+        self.updating_enabled = True
+
+    def run_flash_all_routine(self):
+        print("Flash firmware and params")
+        self.update_motor_handler()
+
+        # Disable updating while flashing the device since it will be nonresponsive in dfu mode
+        self.updating_enabled = False
+        self.motor_handler.run_flash_all_routine()
+        # Wait for the device to show up again
+        time.sleep(6)
+        # Reenable updates
+        self.updating_enabled = True
+
+
 class CalibrateTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(CalibrateTab, self).__init__(*args, **kwargs)
@@ -808,6 +905,21 @@ class CalibrateTab(MotorTab):
         self.find_limits_button.clicked.connect(self.find_limits)
         layout.addWidget(self.find_limits_button)
 
+        save_to_flash_layout = QHBoxLayout()
+        self.button = QPushButton("Save runtime values to flash")
+        self.button.setToolTip("Save to flash")
+        self.button.clicked.connect(self.run_read_runtime_and_save_to_flash_routine)
+        save_to_flash_layout.addWidget(self.button)
+        layout.addLayout(save_to_flash_layout)
+
+        self.combo_box = QComboBox()
+        self.all_config_files = os.listdir(robot_config_path)
+        self.last_motor = None
+        self.current_motor_config_files = []
+        self.update_config_file_combo_box()
+        save_to_flash_layout.addWidget(self.combo_box)
+        layout.addLayout(save_to_flash_layout)
+
         self.setLayout(layout)
 
     def update(self):
@@ -815,6 +927,16 @@ class CalibrateTab(MotorTab):
         self.oposition.setNumber(self.status.joint_position)
         self.mposition.setNumber(self.status.motor_position)
         self.torque.setNumber(self.status.torque)
+
+    def update_config_file_combo_box(self):
+        if self.last_motor is None or self.last_motor not in current_motor().name():
+            print(f"{self.last_motor}, {current_motor().name()}")
+            self.current_motor_config_files = []
+            for item in self.all_config_files:
+                if current_motor().name() in item:
+                    self.current_motor_config_files.append(item)
+                    self.combo_box.insertItem(self.combo_box.count(), item)
+        self.last_motor = current_motor().name()
 
     def phase_lock(self):
         print("phase lock")
@@ -841,6 +963,21 @@ class CalibrateTab(MotorTab):
 
     def obias_set(self):
         pass
+
+    def run_read_runtime_and_save_to_flash_routine(self):
+        print("Reading runtime values and saving to flash")
+        motor_config = robot_config_path + self.combo_box.currentText()
+        motor_info = {"sn": current_motor().serial_number()}
+        self.motor_handler = MotorHandler(current_motor().name(), 
+                                                robot_config_path,
+                                                motor_info)
+        # Disable updating while flashing the device since it will be nonresponsive in dfu mode
+        self.updating_enabled = False
+        self.motor_handler.run_read_runtime_and_save_to_flash_routine()
+        # Wait for the device to show up again
+        time.sleep(6)
+        # Reenable updates
+        self.updating_enabled = True
 
 class MainWindow(QMainWindow):
 
@@ -900,6 +1037,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(CurrentTuningTab(), "current tuning")
         self.tabs.addTab(PositionTuningTab(), "position tuning")
         self.tabs.addTab(StepperTab(), "stepper")
+        self.tabs.addTab(BringupTab(), "bringup")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
@@ -911,6 +1049,28 @@ class MainWindow(QMainWindow):
         self.tuning_tab.currentChanged.connect(self.new_tuning_tab)
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
+
+    def refresh(self):
+        # Try to reconnect the motors upon a refresh request
+        motor_manager = motor.MotorManager()
+        self.simulated = False
+        motors = None
+        if "-simulated" in QCoreApplication.arguments():
+            self.simulated = True
+            motors = motor_manager.get_motors_by_name(["sim1", "sim2"], connect=False, allow_simulated = True)
+        else:
+            motors = motor_manager.get_connected_motors(connect=False)
+        print(motors)
+        self.menu_bar = QMenuBar(self)
+        self.motor_menu = QMenu("&Motor")
+        self.menu_bar.addMenu(self.motor_menu)
+        self.setMenuBar(self.menu_bar)
+        actions = []
+        for m in motors:
+            actions.append(self.motor_menu.addAction(m.name()))
+            print(m.name())
+        self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
+        self.connect_motor(motors[0].name())
 
     def connect_motor_ip(self, ip):
         global cpu_frequency
