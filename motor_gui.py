@@ -949,6 +949,8 @@ class CurrentTuningTab(MotorTab):
         self.ki.refresh_value()
         self.ki_limit.refresh_value()
         self.command_max.refresh_value()
+        self.filter.refresh_value()
+        self.pwm_mult.refresh_value()
         return super().unpause()
 
     def command_update(self):
