@@ -692,7 +692,7 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.config_combo_box)
 
         self.fw_type_combo_box = QComboBox()
-        fw_types = ["motor_aksim", "motor_aksim_19_17", "motor_aksim_20_19"]
+        fw_types = ["motor_aksim", "motor_aksim_19_17", "motor_aksim_19_18", "motor_aksim_20_19"]
         self.fw_type_combo_box.addItems(fw_types)
         select_params_layout.addWidget(self.fw_type_combo_box)
 
@@ -730,7 +730,6 @@ class BringupTab(MotorTab):
         self.board_type = self.board_type_combo_box.currentText()
         self.motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
         motor_info = {"fw_type": self.fw_type, "pcb_type": self.board_type, "sn":current_motor().serial_number()}
-        # name = self.motor_config
         self.motor_handler = MotorHandler(self.motor_name, 
                                             robot_config_path,
                                             motor_info)
@@ -911,10 +910,12 @@ class CalibrateTab(MotorTab):
 
     def update_config_file_combo_box(self):
         if self.last_motor is None or self.last_motor not in current_motor().name():
-            print(f"{self.last_motor}, {current_motor().name()}")
+            print(f"Previously: {self.last_motor}, Currently: {current_motor().name()}")
             self.current_motor_config_files = []
+            self.combo_box.clear()
             for item in self.all_config_files:
-                if current_motor().name() in item:
+                names = [current_motor().name(), "_".join(current_motor().name().split("_")[:-1])]
+                if ( (names[0] in item) or (names[1] in item)):
                     self.current_motor_config_files.append(item)
                     self.combo_box.insertItem(self.combo_box.count(), item)
         self.last_motor = current_motor().name()
@@ -947,11 +948,11 @@ class CalibrateTab(MotorTab):
 
     def run_read_runtime_and_save_to_flash_routine(self):
         print("Reading runtime values and saving to flash")
-        motor_config = robot_config_path + self.combo_box.currentText()
+        motor_name = os.path.splitext(self.combo_box.currentText())[0]
         motor_info = {"sn": current_motor().serial_number()}
-        self.motor_handler = MotorHandler(current_motor().name(), 
-                                                robot_config_path,
-                                                motor_info)
+        self.motor_handler = MotorHandler(motor_name, 
+                                            robot_config_path,
+                                            motor_info)
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         self.updating_enabled = False
         self.motor_handler.run_read_runtime_and_save_to_flash_routine()
