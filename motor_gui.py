@@ -36,7 +36,6 @@ if(robot_config_path is None or obot_path is None):
     print("Please define ROBOT_CONFIG_PATH and OBOT_PATH environment variables."\
           "Run the following commands with the correct user path`export ROBOT_CONFIG_PATH=/home/user-path/project-x/tools/obot/robot01_parameters` \
            and `export OBOT_PATH=/home/user-path/obot-controller/obot-g474`")
-    sys.exit()
 
 # Assumes the .py files live in motorlib/scripts
 sys.path.append(obot_path + "/../motorlib/scripts")
@@ -702,6 +701,12 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.board_type_combo_box)
         layout.addLayout(select_params_layout)
 
+        self.compile_opts_combo_box = QComboBox()
+        compile_opts = ["-DJOINT_ENCODER_BITS=18", "-DBROKEN_MAX31875",'']
+        self.compile_opts_combo_box.addItems(compile_opts)
+        select_params_layout.addWidget(self.compile_opts_combo_box)
+        layout.addLayout(select_params_layout)
+
         buttons_layout = QHBoxLayout()
         self.flash_param_btn = QPushButton("Flash params only")
         self.flash_param_btn.setToolTip("Flash params")
@@ -728,11 +733,15 @@ class BringupTab(MotorTab):
     def update_motor_handler(self):
         self.fw_type = self.fw_type_combo_box.currentText()
         self.board_type = self.board_type_combo_box.currentText()
+        self.compile_opts = self.compile_opts_combo_box.currentText()
         self.motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
-        motor_info = {"fw_type": self.fw_type, "pcb_type": self.board_type, "sn":current_motor().serial_number()}
-        self.motor_handler = MotorHandler(self.motor_name, 
-                                            robot_config_path,
-                                            motor_info)
+        self.serial_number = current_motor().serial_number()
+        motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts}\'", "sn":current_motor().serial_number()}}
+        print(motor_info)
+        self.motor_handler = MotorHandler( robot_config_path,
+                                            None,
+                                            motor_info,
+                                            self.motor_name)
 
     def run_flash_params_routine(self):
         print("Flash param binary")
@@ -949,10 +958,11 @@ class CalibrateTab(MotorTab):
     def run_read_runtime_and_save_to_flash_routine(self):
         print("Reading runtime values and saving to flash")
         motor_name = os.path.splitext(self.combo_box.currentText())[0]
-        motor_info = {"sn": current_motor().serial_number()}
-        self.motor_handler = MotorHandler(motor_name, 
-                                            robot_config_path,
-                                            motor_info)
+        motor_info = {motor_name :{"fw_type": None, "pcb_type": None, "sn":current_motor().serial_number()}}
+        self.motor_handler = MotorHandler( robot_config_path,
+                                            None,
+                                            motor_info,
+                                            motor_name)
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         self.updating_enabled = False
         self.motor_handler.run_read_runtime_and_save_to_flash_routine()
