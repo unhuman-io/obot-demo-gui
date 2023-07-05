@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QMenu,
     QPlainTextEdit,
+    QFrame
 )
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
@@ -636,13 +637,11 @@ class CalibrateTab(MotorTab):
 
         self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)", "also calls set_startup_bias\nstartup_param.motor_encoder_bias")
         self.mbias.signal.connect(self.mbias_set)
-        self.mposition_raw = APIDisplay("motor_position_raw", "motor abs position (rad)")
         self.mposition = NumberDisplay("motor position (rad)", tooltip="status.motor_position")
         self.mdir = APIDir("mdir", "motor position dir", "fast_loop_param.motor_encoder.dir")
 
         mlayout = QHBoxLayout()
         mlayout.addWidget(self.mbias)
-        mlayout.addWidget(self.mposition_raw)
         mlayout.addWidget(self.mposition)
         mlayout.addWidget(self.mdir)
         layout.addLayout(mlayout)
@@ -655,6 +654,11 @@ class CalibrateTab(MotorTab):
         tlayout.addWidget(self.torque)
         tlayout.addWidget(self.tdir)
         layout.addLayout(tlayout)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
 
         find_limits_layout = QHBoxLayout()
         self.find_limits_velocity = NumberEdit("velocity", tooltip="command.velocity_desired")
@@ -678,10 +682,6 @@ class CalibrateTab(MotorTab):
         self.mposition.setNumber(self.status.motor_position)
         self.odir.update()
         self.torque.setNumber(self.status.torque)
-        mposition_raw = float(current_motor()[self.mposition_raw.name].get()) % 2*np.pi
-        if mposition_raw > np.pi:
-            mposition_raw -= 2*np.pi
-        self.mposition_raw.setNumber(mposition_raw)
         self.obias.update()
         self.mbias.update()
         self.mdir.update()
