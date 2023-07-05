@@ -620,9 +620,12 @@ class CalibrateTab(MotorTab):
         boollayout = QHBoxLayout()
         self.position_limits_disable = APIBool("disable_position_limits", "disable position limits")
         self.phase_mode = APIBool("phase_mode", "phase mode", "fast_loop_param.phase_mode")
+        self.idir = APIBool("idir", "current direction", "fast_loop_param.current_direction")
         boollayout.addWidget(self.position_limits_disable)
         boollayout.addWidget(self.phase_mode)
+        boollayout.addWidget(self.idir)
         layout.addLayout(boollayout)
+        
         
 
         self.obias = APIEdit("obias", "output bias (rad)", "main_loop_param.output_encoder.bias")
@@ -681,6 +684,7 @@ class CalibrateTab(MotorTab):
         self.oposition.setNumber(self.status.joint_position)
         self.mposition.setNumber(self.status.motor_position)
         self.odir.update()
+        self.idir.update()
         self.torque.setNumber(self.status.torque)
         self.obias.update()
         self.mbias.update()
