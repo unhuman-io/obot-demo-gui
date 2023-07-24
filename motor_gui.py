@@ -316,6 +316,7 @@ class StatusTab(MotorTab):
             self.statuses[i].signal.connect(self.valueEdit)
             self.statuses[i].combo_box.addItems(self.field_names)
         self.statuses[0].combo_box.setCurrentText("vbus")
+        self.statuses[1].combo_box.setCurrentText("error_mask")
         self.setLayout(layout)
 
 
@@ -400,7 +401,7 @@ class PlotTab2(MotorTab):
         self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.field_names = current_motor()["help"].get().split('\n')
+        self.field_names = current_motor().get_api_options()
         self.combo_box.addItems(self.field_names)
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
