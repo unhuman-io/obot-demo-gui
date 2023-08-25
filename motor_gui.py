@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-
+import traceback
 
 from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF
 from PyQt5.QtWidgets import (
@@ -846,12 +846,15 @@ class CurrentTuningTab(MotorTab):
         self.filter = ParameterEdit("iq_filter", "current_filter (Hz)")
         self.filter.signal.connect(lambda val: current_motor()["id_filter"].set(str(val)))
         self.pwm_mult = ParameterEdit("pwm_mult")
+        self.ilimit = ParameterEdit("ilimit", "current rate limit (A/s)", tooltip="fast_loop_param.foc_param.i{q,d}_rate_limit")
+        self.ilimit.signal.connect(lambda val: current_motor()["ilimit"].set(str(val)))
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.ki,0,1)
-        parameter_layout.addWidget(self.ki_limit,1,0)
-        parameter_layout.addWidget(self.command_max,1,1)
-        parameter_layout.addWidget(self.filter,2,0)
-        parameter_layout.addWidget(self.pwm_mult,2,1)
+        parameter_layout.addWidget(self.ki_limit,0,2)
+        parameter_layout.addWidget(self.command_max,1,0)
+        parameter_layout.addWidget(self.filter,1,1)
+        parameter_layout.addWidget(self.pwm_mult,1,2)
+        parameter_layout.addWidget(self.ilimit,2,0)
         layout.addLayout(parameter_layout)
 
         # self.text = QPlainTextEdit()
@@ -881,6 +884,22 @@ class CurrentTuningTab(MotorTab):
         self.series.attachAxis(self.axis_y)
         self.series2.attachAxis(self.axis_y)
         self.axis_y.setRange(-100,100)
+        self.axis_y2 = QValueAxis()
+        self.axis_y2.setTickCount(10)
+        self.axis_y2.setTitleText("voltage (V)")
+        self.chart.addAxis(self.axis_y2, Qt.AlignmentFlag.AlignRight)
+        self.seriesvd = QLineSeries()
+        self.seriesvd.setUseOpenGL(True)
+        self.seriesvd.setName("vd")
+        self.chart.addSeries(self.seriesvd)
+        self.seriesvd.attachAxis(self.axis_x)
+        self.seriesvd.attachAxis(self.axis_y2)
+        self.seriesvq = QLineSeries()
+        self.seriesvq.setUseOpenGL(True)
+        self.seriesvq.setName("vq")
+        self.chart.addSeries(self.seriesvq)
+        self.seriesvq.attachAxis(self.axis_x)
+        self.seriesvq.attachAxis(self.axis_y2)
 
         layout.addWidget(self.chart_view)
 
@@ -906,16 +925,27 @@ class CurrentTuningTab(MotorTab):
         fast_log = current_motor().get_fast_log()
         #self.text.setPlainText(fast_log)
 
-
-
         try:
+            num_poles = float(current_motor()["num_poles"].get())
             data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1)
             t_seconds = data["timestamp"]/cpu_frequency*1000
             t_seconds -= t_seconds[0]
             self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
             iq_des = np.matrix(data["iq_des"]).transpose()
             iq_meas_filt = np.matrix(data["iq_meas_filt"]).transpose()
+            va = np.matrix(data["va"]).transpose()
+            vb = np.matrix(data["vb"]).transpose()
+            vc = np.matrix(data["vc"]).transpose()
+            pos = num_poles*np.matrix(data["position"]).transpose()
             dt = (t_seconds[1] - t_seconds[0])/1000
+
+            cos_t = np.cos(pos)
+            sin_t = np.sin(pos)
+
+            Kc = np.matrix([[2.0/3, -1.0/3, -1.0/3], [0, 1.0/np.sqrt(3), -1.0/np.sqrt(3)]])
+            valpha_beta = (Kc*np.block([va,vb,vc]).transpose()).transpose()
+            vd = np.asarray(cos_t) * np.asarray(valpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(valpha_beta[:,1])
+            vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
 
             #fmeas = fft(iq_des)
             fmeas = self.ei*iq_des
@@ -940,14 +970,23 @@ class CurrentTuningTab(MotorTab):
             self.series.replace(xy) #append(self.t_seconds, float(val))
             xy2 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(iq_meas_filt)))] # abs(fmeas)))]#iq_meas_filt))]
             self.series2.replace(xy2)
+            xy3 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(vd)))]
+            self.seriesvd.replace(xy3)
+            xy4 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(vq)))]
+            self.seriesvq.replace(xy4)
             min_y = min(min([d.y() for d in self.series.pointsVector()]), min([d.y() for d in self.series2.pointsVector()]))
             max_y = max(max([d.y() for d in self.series.pointsVector()]), max([d.y() for d in self.series2.pointsVector()]))
             self.axis_y.setMin(min_y)
             self.axis_y.setMax(max_y)
             self.axis_x.setMin(min(t_seconds))
             self.axis_x.setMax(max(t_seconds))
-        except ValueError:
-            pass
+            min_y2 = min(min([d.y() for d in self.seriesvd.pointsVector()]), min([d.y() for d in self.seriesvq.pointsVector()]))
+            max_y2 = max(max([d.y() for d in self.seriesvd.pointsVector()]), max([d.y() for d in self.seriesvq.pointsVector()]))
+            self.axis_y2.setMin(min_y2)
+            self.axis_y2.setMax(max_y2)
+        except ValueError as err:
+            print(traceback.format_exc())
+
 
     def unpause(self):
         self.kp.refresh_value()
