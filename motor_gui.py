@@ -21,7 +21,8 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QMenu,
     QPlainTextEdit,
-    QFrame
+    QFrame,
+    QRadioButton
 )
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
@@ -133,7 +134,7 @@ class APIBool(QWidget):
 
     def update(self):
         val = current_motor()[self.name].get()
-        self.checkbox.setChecked(val != "0")
+        self.checkbox.setChecked(float(val) != 0)
     
     def clicked(self, on):
         if on:
@@ -198,6 +199,43 @@ class StatusDisplay(QPushButton):
     def keyPressEvent(self, event):
         pass
 
+class FaultDisplay(QWidget):
+    def __init__(self, name, *args, **kwargs):
+        super(FaultDisplay, self).__init__(*args, **kwargs)
+        self.button = StatusDisplay(name, *args, **kwargs)
+        self.name = name
+        self.layout = QHBoxLayout()
+        self.radio = QRadioButton(*args, **kwargs)
+        self.layout.addWidget(self.button)
+        self.layout.addWidget(self.radio)
+        self.radio.setFixedWidth(30)
+        self.layout.setContentsMargins(QMargins(0,0,0,0))
+        self.setLayout(self.layout)
+        self.radio.clicked.connect(self.change_mask)
+
+    def change_mask(self, event):
+        mask = current_motor().error_mask()
+        if self.name in mask.keys():
+            if not mask[self.name]:
+                mask[self.name] = True
+            else:
+                mask[self.name] = False
+            current_motor().set_error_mask(mask)
+    
+    def update(self, faults, mask):
+        if self.button.text() in faults.keys():
+            if faults[self.button.text()]:
+                self.button.setStyleSheet("background-color: red")
+            else:
+                self.button.setStyleSheet("background-color: green")
+        if self.button.text() in mask.keys():
+            if not mask[self.button.text()]:
+                self.button.setDisabled(True)
+                self.radio.setChecked(False)
+            else:
+                self.button.setDisabled(False)
+                self.radio.setChecked(True)
+
 class StatusCombo(QWidget):
     signal = pyqtSignal(str, str)
     def __init__(self, *args, **kwargs):
@@ -237,6 +275,10 @@ class MotorTab(QWidget):
 
     def unpause(self):
         self.timer.start(self.update_time)
+    
+def clear_fault_mask(text):
+    print(text)
+
 
 class FaultTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -254,10 +296,10 @@ class FaultTab(MotorTab):
 
 
         for field in self.fields:
-            widget = StatusDisplay(field)
+            widget = FaultDisplay(field)
             if field in mask.keys():
                 if not mask[field]:
-                    widget.setDisabled(True)
+                    widget.button.setDisabled(True)
 
             self.faults.append(widget)
             layout.addWidget(widget)
@@ -282,19 +324,11 @@ class FaultTab(MotorTab):
         super(FaultTab, self).update()
 
         mask = current_motor().error_mask()
-        self.faults[0].setText("mode: " + self.status.flags.mode.name.lower())
+        self.faults[0].button.setText("mode: " + self.status.flags.mode.name.lower())
         faults = self.status.flags.error.bits
         for widget in self.faults:
-            if widget.text() in faults.keys():
-                if faults[widget.text()]:
-                    widget.setStyleSheet("background-color: red")
-                else:
-                    widget.setStyleSheet("background-color: green")
-            if widget.text() in mask.keys():
-                if not mask[widget.text()]:
-                    widget.setDisabled(True)
-                else:
-                    widget.setDisabled(False)
+            widget.update(faults, mask)
+
 
 class StatusTab(MotorTab):
     def __init__(self, *args, **kwargs):
