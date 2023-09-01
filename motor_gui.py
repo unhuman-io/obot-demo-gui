@@ -1051,6 +1051,51 @@ class CurrentTuningTab(MotorTab):
         self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
         self.command_update()
 
+class StreamingChart(QChartView):
+    def __init__(self, num_lines=1, *args, **kwargs):
+        self.chart = QChart()
+        super(StreamingChart, self).__init__(self.chart, *args, **kwargs)
+        self.setRubberBand(QChartView.VerticalRubberBand)
+        self.num_lines = num_lines  
+        
+        self.axis_x = QValueAxis()
+        self.axis_x.setTickCount(10)
+        self.axis_x.setTitleText("Time (s)")
+        self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
+        
+        self.axis_y = QValueAxis()
+        self.axis_y.setTickCount(10)        
+        self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
+        
+        self.axis_y.setRange(-100,100)
+        #self.axis_y.setTitleText("Motor velocity (rad/s)")
+        self.series = [1]
+        for i in range(num_lines):
+            self.series[i] = QLineSeries()
+            self.series[i].setUseOpenGL(True)
+            self.chart.addSeries(self.series[i])
+            self.series[i].attachAxis(self.axis_x)
+            self.series[i].attachAxis(self.axis_y)
+
+        self.t_seconds = 0
+        self.mcu_timestamp = 0
+
+    def update(self, data):
+        dt = (motor.diff_mcu_time(status.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
+        self.t_seconds += dt
+        self.mcu_timestamp = status.mcu_timestamp
+
+        try:
+            for i in range(self.num_lines):
+                self.series[i].append(self.t_seconds, data[i])
+                if len(self.series[i]) > 200:
+                    self.series[i].remove(0)
+                self.axis_y.setMin(min([d.y() for d in self.series[i].pointsVector()]))
+                self.axis_y.setMax(max([d.y() for d in self.series[i].pointsVector()]))
+                self.axis_x.setMax(self.t_seconds)
+                self.axis_x.setMin(self.series[i].at(0).x())
+        except ValueError:
+            pass
 
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -1102,11 +1147,14 @@ class PositionTuningTab(MotorTab):
         parameter_layout.addWidget(self.output_filter,1,1)
         parameter_layout.addWidget(self.velocity_filter,2,0)
         layout.addLayout(parameter_layout)
+        self.chart = StreamingChart()
+        layout.addWidget(self.chart)
 
         self.setLayout(layout)
 
     def update(self):
         super(PositionTuningTab, self).update()
+        self.chart.update(self.status.motor_position)
   
 
     def unpause(self):
