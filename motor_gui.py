@@ -1069,7 +1069,7 @@ class StreamingChart(QChartView):
         
         self.axis_y.setRange(-100,100)
         #self.axis_y.setTitleText("Motor velocity (rad/s)")
-        self.series = [1]
+        self.series = [1] * num_lines
         for i in range(num_lines):
             self.series[i] = QLineSeries()
             self.series[i].setUseOpenGL(True)
@@ -1077,29 +1077,28 @@ class StreamingChart(QChartView):
             self.series[i].attachAxis(self.axis_x)
             self.series[i].attachAxis(self.axis_y)
 
-        self.t_seconds = 0
-        self.mcu_timestamp = 0
-
-    def update(self, data):
-        dt = (motor.diff_mcu_time(status.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
-        self.t_seconds += dt
-        self.mcu_timestamp = status.mcu_timestamp
-
+    def update(self, t, data):
         try:
+            min1 = float("inf")
+            max1 = float("-inf")
             for i in range(self.num_lines):
-                self.series[i].append(self.t_seconds, data[i])
+                self.series[i].append(t, data[i])
                 if len(self.series[i]) > 200:
                     self.series[i].remove(0)
-                self.axis_y.setMin(min([d.y() for d in self.series[i].pointsVector()]))
-                self.axis_y.setMax(max([d.y() for d in self.series[i].pointsVector()]))
-                self.axis_x.setMax(self.t_seconds)
-                self.axis_x.setMin(self.series[i].at(0).x())
+                min1 = min(min1,min([d.y() for d in self.series[i].pointsVector()]))
+                max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
+
+            self.axis_y.setMin(min1)
+            self.axis_y.setMax(max1)
+            self.axis_x.setMax(t)
+            self.axis_x.setMin(self.series[0].at(0).x())
         except ValueError:
             pass
 
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(PositionTuningTab, self).__init__(*args, **kwargs)
+        self.update_time = 10
 
         self.name = "position_tuning"
         self.command = motor.Command()
@@ -1147,14 +1146,28 @@ class PositionTuningTab(MotorTab):
         parameter_layout.addWidget(self.output_filter,1,1)
         parameter_layout.addWidget(self.velocity_filter,2,0)
         layout.addLayout(parameter_layout)
-        self.chart = StreamingChart()
+        self.chart = StreamingChart(3)
         layout.addWidget(self.chart)
 
         self.setLayout(layout)
+        self.mcu_timestamp = 0
+        self.t_seconds = 0
+        self.chart.series[0].setName("measured")
+        self.chart.series[1].setName("desired")
+        self.chart.series[2].setName("error")
+        self.chart.axis_y.setTitleText("Motor position (rad)")
 
     def update(self):
         super(PositionTuningTab, self).update()
-        self.chart.update(self.status.motor_position)
+        
+        dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
+        self.t_seconds += dt
+        self.mcu_timestamp = self.status.mcu_timestamp
+
+        error = float(current_motor()["error"].get())
+        desired = self.status.motor_position + error
+
+        self.chart.update(self.t_seconds, [self.status.motor_position, desired, error])
   
 
     def unpause(self):
