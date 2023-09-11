@@ -961,7 +961,7 @@ class CurrentTuningTab(MotorTab):
 
         try:
             num_poles = float(current_motor()["num_poles"].get())
-            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1)
+            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=2)
             t_seconds = data["timestamp"]/cpu_frequency*1000
             t_seconds -= t_seconds[0]
             self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
@@ -1098,7 +1098,7 @@ class StreamingChart(QChartView):
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(PositionTuningTab, self).__init__(*args, **kwargs)
-        self.update_time = 10
+        self.update_time = 3
 
         self.name = "position_tuning"
         self.command = motor.Command()
@@ -1146,16 +1146,19 @@ class PositionTuningTab(MotorTab):
         parameter_layout.addWidget(self.output_filter,1,1)
         parameter_layout.addWidget(self.velocity_filter,2,0)
         layout.addLayout(parameter_layout)
-        self.chart = StreamingChart(3)
+        self.chart = StreamingChart(2)
         layout.addWidget(self.chart)
+        self.chart2 = StreamingChart(1)
+        layout.addWidget(self.chart2)
 
         self.setLayout(layout)
         self.mcu_timestamp = 0
         self.t_seconds = 0
         self.chart.series[0].setName("measured")
         self.chart.series[1].setName("desired")
-        self.chart.series[2].setName("error")
         self.chart.axis_y.setTitleText("Motor position (rad)")
+        self.chart2.series[0].setName("error")
+        self.chart2.axis_y.setTitleText("Motor position (rad)")
 
     def update(self):
         super(PositionTuningTab, self).update()
@@ -1167,7 +1170,8 @@ class PositionTuningTab(MotorTab):
         error = float(current_motor()["error"].get())
         desired = self.status.motor_position + error
 
-        self.chart.update(self.t_seconds, [self.status.motor_position, desired, error])
+        self.chart.update(self.t_seconds, [self.status.motor_position, desired])
+        self.chart2.update(self.t_seconds, [error])
   
 
     def unpause(self):
