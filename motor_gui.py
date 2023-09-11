@@ -385,6 +385,14 @@ class PlotTab(MotorTab):
         self.combo_box.currentIndexChanged.connect(lambda: self.series.removePoints(0,self.series.count()))
         self.layout.addWidget(self.combo_box)
         self.layout.addWidget(self.chart_view)
+        var_layout = QHBoxLayout()
+        self.pp = NumberDisplay("peak-peak")
+        var_layout.addWidget(self.pp)
+        self.std = NumberDisplay("std dev")
+        var_layout.addWidget(self.std)
+        self.mean = NumberDisplay("mean")
+        var_layout.addWidget(self.mean)
+        self.layout.addLayout(var_layout)
         self.setLayout(self.layout)
 
         self.series = QLineSeries()
@@ -413,6 +421,10 @@ class PlotTab(MotorTab):
         self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
         self.mcu_timestamp = s.mcu_timestamp
         self.series.append(self.t_seconds, getattr(s, self.combo_box.currentText()))
+        val = np.array([d.y() for d in self.series.pointsVector()])
+        self.std.setNumber(np.std(val))
+        self.mean.setNumber(np.mean(val))
+        self.pp.setNumber(max(val) - min(val))
         if len(self.series) > 500:
             self.series.remove(0)
         self.axis_x.setMax(self.t_seconds)
@@ -440,6 +452,15 @@ class PlotTab2(MotorTab):
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
         self.layout.addWidget(self.chart_view)
+        var_layout = QHBoxLayout()
+        self.pp = NumberDisplay("peak-peak")
+        var_layout.addWidget(self.pp)
+        self.std = NumberDisplay("std dev")
+        var_layout.addWidget(self.std)
+        self.mean = NumberDisplay("mean")
+        var_layout.addWidget(self.mean)
+        self.layout.addLayout(var_layout)
+        self.setLayout(self.layout)
         self.setLayout(self.layout)
 
         self.series = QLineSeries()
@@ -474,6 +495,10 @@ class PlotTab2(MotorTab):
         val = current_motor()[self.combo_box.currentText()].get()
         try:
             self.series.append(self.t_seconds, float(val))
+            val2 = np.array([d.y() for d in self.series.pointsVector()])
+            self.std.setNumber(np.std(val2))
+            self.mean.setNumber(np.mean(val2))
+            self.pp.setNumber(max(val2) - min(val2))
             if len(self.series) > 500:
                 self.series.remove(0)
             self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
