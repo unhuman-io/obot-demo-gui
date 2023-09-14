@@ -338,19 +338,28 @@ class StatusTab(MotorTab):
         self.name = "status"
         #print("init: " + self.name)
         #self.field_names = current_motor()["help"].get().split('\n')
-        self.field_names = current_motor().get_api_options()
+        self.field_names = sorted(current_motor().get_api_options())
 
         self.statuses = []
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.setContentsMargins(QMargins(0,0,0,0))
-        for i in range(5):
+        #layout.setContentsMargins(QMargins(0,0,0,0))
+        for i in range(10):
             self.statuses.append(StatusCombo())
+            self.statuses[i].layout.setContentsMargins(QMargins(0,0,0,0))
             layout.addWidget(self.statuses[i])
             self.statuses[i].signal.connect(self.valueEdit)
             self.statuses[i].combo_box.addItems(self.field_names)
         self.statuses[0].combo_box.setCurrentText("vbus")
-        self.statuses[1].combo_box.setCurrentText("error_mask")
+        self.statuses[1].combo_box.setCurrentText("5V")
+        self.statuses[2].combo_box.setCurrentText("3v3")
+        self.statuses[3].combo_box.setCurrentText("mraw")
+        self.statuses[4].combo_box.setCurrentText("oraw")
+        self.statuses[5].combo_box.setCurrentText("Tmotor")
+        self.statuses[6].combo_box.setCurrentText("Tambient")
+        self.statuses[7].combo_box.setCurrentText("Tboard")
+        self.statuses[8].combo_box.setCurrentText("i5V")
+        self.statuses[9].combo_box.setCurrentText("i48V")
         self.setLayout(layout)
 
 
@@ -447,7 +456,7 @@ class PlotTab2(MotorTab):
         self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.field_names = current_motor().get_api_options()
+        self.field_names = sorted(current_motor().get_api_options())
         self.combo_box.addItems(self.field_names)
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
