@@ -338,19 +338,28 @@ class StatusTab(MotorTab):
         self.name = "status"
         #print("init: " + self.name)
         #self.field_names = current_motor()["help"].get().split('\n')
-        self.field_names = current_motor().get_api_options()
+        self.field_names = sorted(current_motor().get_api_options())
 
         self.statuses = []
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.setContentsMargins(QMargins(0,0,0,0))
-        for i in range(5):
+        #layout.setContentsMargins(QMargins(0,0,0,0))
+        for i in range(10):
             self.statuses.append(StatusCombo())
+            self.statuses[i].layout.setContentsMargins(QMargins(0,0,0,0))
             layout.addWidget(self.statuses[i])
             self.statuses[i].signal.connect(self.valueEdit)
             self.statuses[i].combo_box.addItems(self.field_names)
         self.statuses[0].combo_box.setCurrentText("vbus")
-        self.statuses[1].combo_box.setCurrentText("error_mask")
+        self.statuses[1].combo_box.setCurrentText("5V")
+        self.statuses[2].combo_box.setCurrentText("3v3")
+        self.statuses[3].combo_box.setCurrentText("mraw")
+        self.statuses[4].combo_box.setCurrentText("oraw")
+        self.statuses[5].combo_box.setCurrentText("Tmotor")
+        self.statuses[6].combo_box.setCurrentText("Tambient")
+        self.statuses[7].combo_box.setCurrentText("Tboard")
+        self.statuses[8].combo_box.setCurrentText("i5V")
+        self.statuses[9].combo_box.setCurrentText("i48V")
         self.setLayout(layout)
 
 
@@ -385,6 +394,14 @@ class PlotTab(MotorTab):
         self.combo_box.currentIndexChanged.connect(lambda: self.series.removePoints(0,self.series.count()))
         self.layout.addWidget(self.combo_box)
         self.layout.addWidget(self.chart_view)
+        var_layout = QHBoxLayout()
+        self.pp = NumberDisplay("peak-peak")
+        var_layout.addWidget(self.pp)
+        self.std = NumberDisplay("std dev")
+        var_layout.addWidget(self.std)
+        self.mean = NumberDisplay("mean")
+        var_layout.addWidget(self.mean)
+        self.layout.addLayout(var_layout)
         self.setLayout(self.layout)
 
         self.series = QLineSeries()
@@ -413,6 +430,10 @@ class PlotTab(MotorTab):
         self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
         self.mcu_timestamp = s.mcu_timestamp
         self.series.append(self.t_seconds, getattr(s, self.combo_box.currentText()))
+        val = np.array([d.y() for d in self.series.pointsVector()])
+        self.std.setNumber(np.std(val))
+        self.mean.setNumber(np.mean(val))
+        self.pp.setNumber(max(val) - min(val))
         if len(self.series) > 500:
             self.series.remove(0)
         self.axis_x.setMax(self.t_seconds)
@@ -435,11 +456,20 @@ class PlotTab2(MotorTab):
         self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.field_names = current_motor().get_api_options()
+        self.field_names = sorted(current_motor().get_api_options())
         self.combo_box.addItems(self.field_names)
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
         self.layout.addWidget(self.chart_view)
+        var_layout = QHBoxLayout()
+        self.pp = NumberDisplay("peak-peak")
+        var_layout.addWidget(self.pp)
+        self.std = NumberDisplay("std dev")
+        var_layout.addWidget(self.std)
+        self.mean = NumberDisplay("mean")
+        var_layout.addWidget(self.mean)
+        self.layout.addLayout(var_layout)
+        self.setLayout(self.layout)
         self.setLayout(self.layout)
 
         self.series = QLineSeries()
@@ -474,6 +504,10 @@ class PlotTab2(MotorTab):
         val = current_motor()[self.combo_box.currentText()].get()
         try:
             self.series.append(self.t_seconds, float(val))
+            val2 = np.array([d.y() for d in self.series.pointsVector()])
+            self.std.setNumber(np.std(val2))
+            self.mean.setNumber(np.mean(val2))
+            self.pp.setNumber(max(val2) - min(val2))
             if len(self.series) > 500:
                 self.series.remove(0)
             self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
@@ -961,7 +995,7 @@ class CurrentTuningTab(MotorTab):
 
         try:
             num_poles = float(current_motor()["num_poles"].get())
-            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1)
+            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=2)
             t_seconds = data["timestamp"]/cpu_frequency*1000
             t_seconds -= t_seconds[0]
             self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
@@ -1098,7 +1132,7 @@ class StreamingChart(QChartView):
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(PositionTuningTab, self).__init__(*args, **kwargs)
-        self.update_time = 10
+        self.update_time = 3
 
         self.name = "position_tuning"
         self.command = motor.Command()
@@ -1146,16 +1180,19 @@ class PositionTuningTab(MotorTab):
         parameter_layout.addWidget(self.output_filter,1,1)
         parameter_layout.addWidget(self.velocity_filter,2,0)
         layout.addLayout(parameter_layout)
-        self.chart = StreamingChart(3)
+        self.chart = StreamingChart(2)
         layout.addWidget(self.chart)
+        self.chart2 = StreamingChart(1)
+        layout.addWidget(self.chart2)
 
         self.setLayout(layout)
         self.mcu_timestamp = 0
         self.t_seconds = 0
         self.chart.series[0].setName("measured")
         self.chart.series[1].setName("desired")
-        self.chart.series[2].setName("error")
         self.chart.axis_y.setTitleText("Motor position (rad)")
+        self.chart2.series[0].setName("error")
+        self.chart2.axis_y.setTitleText("Motor position (rad)")
 
     def update(self):
         super(PositionTuningTab, self).update()
@@ -1167,7 +1204,8 @@ class PositionTuningTab(MotorTab):
         error = float(current_motor()["error"].get())
         desired = self.status.motor_position + error
 
-        self.chart.update(self.t_seconds, [self.status.motor_position, desired, error])
+        self.chart.update(self.t_seconds, [self.status.motor_position, desired])
+        self.chart2.update(self.t_seconds, [error])
   
 
     def unpause(self):
