@@ -26,19 +26,15 @@ jobs:
     - name: install dependencies
       run: |
         apt-get update
-        apt-get install -y curl sudo virtualenvwrapper zip
+        apt-get install -y curl sudo zip
+        apt-get install -y python3-pyqt5 python3-pyqt5.qtchart python3-numpy pip
         curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-obot.sh > install-obot.sh
         chmod +x install-obot.sh
         ./install-obot.sh --no-driver
-        . /usr/share/virtualenvwrapper/virtualenvwrapper.sh || true
-        echo "done"
-        mkvirtualenv build || true
-        echo "done2"
-        workon build
-        pip install -U pip
-        pip install -r requirements.txt
         pip install pyinstaller
-        add2virtualenv /usr/share/motor-realtime/
+    - name: build with pyinstaller
+      run: |
+        export PYTHONPATH=/usr/share/motor-realtime/
         pyinstaller --hidden-import=PyQt5.sip motor_gui.py
         zip -r dist.zip dist/
     - name: Archive production artifacts
