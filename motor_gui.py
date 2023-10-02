@@ -604,6 +604,7 @@ class VelocityTab(MotorTab):
     def velocity_update(self):
         p = float(self.widget.number_widget.text())
         print("velocity command " + str(p))
+        motor_manager.clear_commands()
         motor_manager.set_command_velocity([p])
         motor_manager.set_command_mode(motor.ModeDesired.Velocity)
         motor_manager.write_saved_commands()
@@ -995,7 +996,7 @@ class CurrentTuningTab(MotorTab):
 
         try:
             num_poles = float(current_motor()["num_poles"].get())
-            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=2)
+            data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=0)
             t_seconds = data["timestamp"]/cpu_frequency*1000
             t_seconds -= t_seconds[0]
             self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
