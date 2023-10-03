@@ -905,9 +905,9 @@ class CurrentTuningTab(MotorTab):
 
         parameter_layout = QGridLayout()
         self.kp = ParameterEdit("ikp", "kp (V/A)")
-        self.kp.signal.connect(lambda val: current_motor()["idkp"].set(str(val)))
+        self.kp.signal.connect(lambda val: [current_motor()["idkp"].set(str(val)), current_motor()["ikp2"].set(str(val)), current_motor()["idkp2"].set(str(val))])
         self.ki = ParameterEdit("iki", "ki (V/(A*T))")
-        self.ki.signal.connect(lambda val: current_motor()["idki"].set(str(val)))
+        self.ki.signal.connect(lambda val: [current_motor()["idki"].set(str(val)), current_motor()["iki2"].set(str(val)), current_motor()["idki2"].set(str(val))])
         self.ki_limit = ParameterEdit("iki_limit", "ki_limit (V)")
         self.ki_limit.signal.connect(lambda val: current_motor()["idki_limit"].set(str(val)))
         self.command_max = ParameterEdit("imax", "command_max (V)")
@@ -986,7 +986,7 @@ class CurrentTuningTab(MotorTab):
         layout.addLayout(measure_layout)
         self.setLayout(layout)
         #t = np.matrix(np.linspace(0,94*(1/50000),95))
-        self.freq =np.matrix(np.linspace(0,10000,10000//5+1)).transpose()
+        self.freq_all =np.matrix(np.linspace(0,10000,10000//5+1)).transpose()
         #self.ei = np.exp(1j*self.freq*t*2*np.pi)
 
     def update(self):
@@ -999,7 +999,7 @@ class CurrentTuningTab(MotorTab):
             data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=0)
             t_seconds = data["timestamp"]/cpu_frequency*1000
             t_seconds -= t_seconds[0]
-            self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
+
             iq_des = np.matrix(data["iq_des"]).transpose()
             iq_meas_filt = np.matrix(data["iq_meas_filt"]).transpose()
             va = np.matrix(data["va"]).transpose()
@@ -1017,6 +1017,12 @@ class CurrentTuningTab(MotorTab):
             vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
 
             #fmeas = fft(iq_des)
+            if self.command.current_tuning.mode == motor.TuningMode.Chirp:
+                self.freq = self.freq_all
+            else:
+                self.freq = np.matrix([self.command.current_tuning.frequency])
+
+            self.ei = np.exp(1j*self.freq*t_seconds/1000*2*np.pi)
             fmeas = self.ei*iq_des
             
             fmeasi = np.argmax(abs(fmeas))
