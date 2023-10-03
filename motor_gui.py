@@ -223,18 +223,26 @@ class FaultDisplay(QWidget):
             current_motor().set_error_mask(mask)
     
     def update(self, faults, mask):
-        if self.button.text() in faults.keys():
-            if faults[self.button.text()]:
-                self.button.setStyleSheet("background-color: red")
-            else:
-                self.button.setStyleSheet("background-color: green")
+        disabled = False
         if self.button.text() in mask.keys():
             if not mask[self.button.text()]:
-                self.button.setDisabled(True)
-                self.radio.setChecked(False)
+                disabled = True
             else:
-                self.button.setDisabled(False)
-                self.radio.setChecked(True)
+                disabled = False
+        if self.button.text() in faults.keys():
+            if faults[self.button.text()]:
+                if disabled:
+                    self.button.setStyleSheet("background-color: orange")
+                else:
+                    self.button.setStyleSheet("background-color: red")
+            else:
+                self.button.setStyleSheet("background-color: green")
+        if disabled:
+            self.button.setDisabled(True)
+            self.radio.setChecked(False)
+        else:
+            self.button.setDisabled(False)
+            self.radio.setChecked(True)
 
 class StatusCombo(QWidget):
     signal = pyqtSignal(str, str)
