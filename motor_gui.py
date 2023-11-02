@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
     QRadioButton
 )
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
-from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
+from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis, QLogValueAxis
 import motor
 import numpy as np
 from io import StringIO
@@ -858,6 +858,8 @@ class MainWindow(QMainWindow):
          print("Connecting motor " + name)
          motor_manager.get_motors_by_name([name], allow_simulated = self.simulated)
          motor_manager.set_auto_count()
+         current_motor()["api_timeout"] = "100000"
+         current_motor().set_timeout_ms(500)
          self.setWindowTitle(name + " sn:" + current_motor().serial_number())
          cpu_frequency = current_motor().get_cpu_frequency()
 
@@ -1049,9 +1051,22 @@ class CurrentTuningTab(MotorTab):
             mag_meas = np.abs(fmeas_meas[fmeasi])/iq_des.size*2
             phas_meas = np.angle(fmeas_meas[fmeasi])
 
-            self.phase.setNumber(-(phas_meas - phas_des)*180/np.pi)
+            phase_deg = -(phas_meas - phas_des)*180/np.pi
+            if phase_deg > 180:
+                phase_deg -= 360
+            self.phase.setNumber(phase_deg)
             self.mag.setNumber(mag_meas/mag_des)
 
+            if self.command.current_tuning.mode == motor.TuningMode.Chirp:
+                # plot bode
+                data = QPointF(self.freq[fmeas_mi], 20*np.log10(np.abs(mag_meas/mag_des)))
+                data_phase = QPointF(self.freq[fmeas_mi], phase_deg)
+                if (data.x() > 0):
+                    self.bode_window.mag_chart.series.append(data)
+                    self.bode_window.phase_chart.series.append(data_phase)
+
+         
+            # plot timeseries
             xy = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(iq_des)))]
             self.series.replace(xy) #append(self.t_seconds, float(val))
             xy2 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(iq_meas_filt)))] # abs(fmeas)))]#iq_meas_filt))]
@@ -1101,7 +1116,46 @@ class CurrentTuningTab(MotorTab):
 
     def mode_update(self, selection):
         self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
+        if self.command.current_tuning.mode == motor.TuningMode.Chirp:
+            self.bode_window = self.BodeWindow()
+            self.bode_window.show()
         self.command_update()
+
+    class BodeWindow(QWidget):
+        def __init__(self):
+            super().__init__()
+            layout = QVBoxLayout()
+            self.label = QLabel("Bode plot")
+            layout.addWidget(self.label)
+            self.mag_chart = self.Chart()
+            layout.addWidget(self.mag_chart.chart_view)
+            self.phase_chart = self.Chart()
+            self.phase_chart.axis_y.setRange(-200, 0)
+            self.phase_chart.axis_y.setTitleText("phase (deg)")
+            layout.addWidget(self.phase_chart.chart_view)
+            self.setLayout(layout)
+
+        class Chart(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.chart = QChart()
+                self.chart_view = QChartView(self.chart)
+                self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+                self.series = QLineSeries()
+                self.series.setUseOpenGL(True)
+                self.chart.addSeries(self.series)
+                self.axis_x = QLogValueAxis()
+                self.axis_x.setMinorTickCount(10)
+                self.axis_x.setTitleText("frequency (Hz)")
+                self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
+                self.series.attachAxis(self.axis_x)
+                self.axis_y = QValueAxis()
+                self.axis_y.setTickCount(10)
+                self.axis_y.setTitleText("magnitude (20*log10(mag))")
+                self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
+                self.series.attachAxis(self.axis_y)
+                self.axis_y.setRange(-20, 10)
+                self.axis_x.setRange(100,10000)
 
 class StreamingChart(QChartView):
     def __init__(self, num_lines=1, *args, **kwargs):
