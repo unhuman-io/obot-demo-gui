@@ -878,7 +878,7 @@ class CurrentTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(CurrentTuningTab, self).__init__(*args, **kwargs)
 
-        self.update_time = 50
+        self.update_time = 100
         self.name = "current_tuning"
         self.command = motor.Command()
         self.command.mode_desired = motor.ModeDesired.CurrentTuning
@@ -1005,8 +1005,11 @@ class CurrentTuningTab(MotorTab):
         try:
             num_poles = float(current_motor()["num_poles"].get())
             data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=0)
+            inds = data["timestamp"].argsort()
+            data = data[inds]
             t_seconds = data["timestamp"]/cpu_frequency*1000
-            t_seconds -= t_seconds[0]
+            t_seconds -= max(t_seconds)
+
 
             iq_des = np.matrix(data["iq_des"]).transpose()
             iq_meas_filt = np.matrix(data["iq_meas_filt"]).transpose()
@@ -1020,7 +1023,7 @@ class CurrentTuningTab(MotorTab):
             sin_t = np.sin(pos)
 
             Kc = np.matrix([[2.0/3, -1.0/3, -1.0/3], [0, 1.0/np.sqrt(3), -1.0/np.sqrt(3)]])
-            valpha_beta = (Kc*np.block([va,vb,vc]).transpose()).transpose()
+            valpha_beta = (Kc*np.block([va,vb,vc]).transpose()).transpose()*1.5
             vd = np.asarray(cos_t) * np.asarray(valpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(valpha_beta[:,1])
             vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
 
