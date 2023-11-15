@@ -3,7 +3,7 @@
 import sys
 import traceback
 
-from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF
+from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
@@ -269,6 +269,7 @@ class MotorTab(QWidget):
         super(MotorTab, self).__init__(*args, **kwargs)
         self.setAutoFillBackground(True)
         self.update_time = 100
+        self.update_list = []
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
@@ -277,6 +278,8 @@ class MotorTab(QWidget):
         global motor_manager
         #print("update: " + self.name)
         self.status = motor_manager.read()[0]
+        for item in self.update_list:
+            item.update()
 
     def pause(self):
         self.timer.stop()
@@ -393,15 +396,15 @@ class PlotTab(MotorTab):
         self.name = "plot"
         self.update_time = 10
 
-        self.chart = QChart()
-        self.chart_view = QChartView(self.chart)
-        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+        self.chart = StreamingChart()
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.combo_box.addItems(["motor_position", "joint_position", "iq", "torque", "motor_encoder", "motor_velocity", "joint_velocity", "iq_desired", "reserved"])
-        self.combo_box.currentIndexChanged.connect(lambda: self.series.removePoints(0,self.series.count()))
+        self.combo_box.addItems(["motor_position", "joint_position", "iq", "torque", "motor_encoder", 
+            "motor_velocity", "joint_velocity", "iq_desired", "reserved", "encoder_error", "cogging"])
+        self.combo_box.currentIndexChanged.connect(self.chart.removePoints)
+        self.combo_box.currentIndexChanged.connect(self.name_change)
         self.layout.addWidget(self.combo_box)
-        self.layout.addWidget(self.chart_view)
+        self.layout.addWidget(self.chart)
         var_layout = QHBoxLayout()
         self.pp = NumberDisplay("peak-peak")
         var_layout.addWidget(self.pp)
@@ -412,24 +415,19 @@ class PlotTab(MotorTab):
         self.layout.addLayout(var_layout)
         self.setLayout(self.layout)
 
-        self.series = QLineSeries()
-        self.chart.addSeries(self.series)
-        self.axis_x = QValueAxis()
-        self.axis_x.setTickCount(10)
-        self.axis_x.setTitleText("Time (s)")
-        self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
-        self.series.attachAxis(self.axis_x)
-        self.axis_y = QValueAxis()
-        self.axis_y.setTickCount(10)
-        self.axis_y.setTitleText("Value")
-        self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
-        self.series.attachAxis(self.axis_y)
-        self.axis_y.setRange(-100,100)
 
         s = motor_manager.read()[0]
         self.mcu_timestamp = s.mcu_timestamp
         self.t_seconds = 0.0
-        self.series.append(0, getattr(s, self.combo_box.currentText()))
+
+    def name_change(self):
+        plot_str = self.combo_box.currentText()
+        print(plot_str)
+        if plot_str == "encoder_error":
+            self.gear_ratio = float(current_motor()["gear_ratio"].get())
+            self.chart.length=10000
+        else:
+            self.chart.length=500
 
 
     def update(self):
@@ -437,17 +435,23 @@ class PlotTab(MotorTab):
         s = self.status
         self.t_seconds += (motor.diff_mcu_time(s.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
         self.mcu_timestamp = s.mcu_timestamp
-        self.series.append(self.t_seconds, getattr(s, self.combo_box.currentText()))
-        val = np.array([d.y() for d in self.series.pointsVector()])
+        plot_str = self.combo_box.currentText()
+        val = 0
+        x = self.t_seconds
+        if plot_str == "encoder_error":
+            val = s.motor_position - s.joint_position * self.gear_ratio
+        elif plot_str == "cogging":
+            val = s.iq
+            x = np.mod(s.motor_position, 2*np.pi)
+        else:
+            val = getattr(s, plot_str)
+        
+        self.chart.update(x, [val])
+
+        val = np.array([d.y() for d in self.chart.series[0].pointsVector()])
         self.std.setNumber(np.std(val))
         self.mean.setNumber(np.mean(val))
         self.pp.setNumber(max(val) - min(val))
-        if len(self.series) > 500:
-            self.series.remove(0)
-        self.axis_x.setMax(self.t_seconds)
-        self.axis_x.setMin(self.series.at(0).x())
-        self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
-        self.axis_y.setMax(max([d.y() for d in self.series.pointsVector()]))
 
 
 class PlotTab2(MotorTab):
@@ -459,16 +463,14 @@ class PlotTab2(MotorTab):
         self.name = "plot2"
         self.update_time = 10
 
-        self.chart = QChart()
-        self.chart_view = QChartView(self.chart)
-        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+        self.chart = StreamingChart()
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
         self.field_names = sorted(current_motor().get_api_options())
         self.combo_box.addItems(self.field_names)
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
-        self.layout.addWidget(self.chart_view)
+        self.layout.addWidget(self.chart)
         var_layout = QHBoxLayout()
         self.pp = NumberDisplay("peak-peak")
         var_layout.addWidget(self.pp)
@@ -480,22 +482,7 @@ class PlotTab2(MotorTab):
         self.setLayout(self.layout)
         self.setLayout(self.layout)
 
-        self.series = QLineSeries()
-        self.series.setUseOpenGL(True)
-        self.chart.addSeries(self.series)
-        self.axis_x = QValueAxis()
-        self.axis_x.setTickCount(10)
-        self.axis_x.setTitleText("Time (s)")
-        self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
-        self.series.attachAxis(self.axis_x)
-        self.axis_y = QValueAxis()
-        self.axis_y.setTickCount(10)
-        self.axis_y.setTitleText("Value")
-        self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
-        self.series.attachAxis(self.axis_y)
-        self.axis_y.setRange(-100,100)
-
-        self.combo_box.currentIndexChanged.connect(lambda: self.series.removePoints(0,self.series.count()))
+        self.combo_box.currentIndexChanged.connect(self.chart.removePoints)
 
         s = motor_manager.read()[0]
         self.mcu_timestamp = s.mcu_timestamp
@@ -511,17 +498,11 @@ class PlotTab2(MotorTab):
         self.mcu_timestamp = s.mcu_timestamp
         val = current_motor()[self.combo_box.currentText()].get()
         try:
-            self.series.append(self.t_seconds, float(val))
-            val2 = np.array([d.y() for d in self.series.pointsVector()])
+            self.chart.update(self.t_seconds, float(val))
+            val2 = np.array([d.y() for d in self.chart.series[0].pointsVector()])
             self.std.setNumber(np.std(val2))
             self.mean.setNumber(np.mean(val2))
             self.pp.setNumber(max(val2) - min(val2))
-            if len(self.series) > 500:
-                self.series.remove(0)
-            self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
-            self.axis_y.setMax(max([d.y() for d in self.series.pointsVector()]))
-            self.axis_x.setMax(self.t_seconds)
-            self.axis_x.setMin(self.series.at(0).x())
         except ValueError:
             pass
 
@@ -665,14 +646,23 @@ class CalibrateTab(MotorTab):
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.electrical_zero_pos = APIDisplay("electrical_zero_pos")
+        layout.addWidget(self.electrical_zero_pos)
+        self.update_list.append(self.electrical_zero_pos)
+
         self.index_offset = APIDisplay("index_offset_measured")
         layout.addWidget(self.index_offset)
+        self.update_list.append(self.index_offset)
 
         self.current_d = APIDisplay("id", "id measured (A)")
         layout.addWidget(self.current_d)
+        self.update_list.append(self.current_d)
 
         self.phase_lock_current_startup = APIDisplay("startup_phase_lock_current", "startup phase lock current (A)", tooltip="startup_param.phase_lock_current")
         layout.addWidget(self.phase_lock_current_startup)
+        self.update_list.append(self.phase_lock_current_startup)
+
         self.phase_lock_current = NumberEdit("phase lock current (A)", tooltip="command.current_desired")
         self.phase_lock_current.setNumber(current_motor()["startup_phase_lock_current"])
         layout.addWidget(self.phase_lock_current)
@@ -702,6 +692,9 @@ class CalibrateTab(MotorTab):
         boollayout.addWidget(self.position_limits_disable)
         boollayout.addWidget(self.phase_mode)
         boollayout.addWidget(self.idir)
+        self.update_list.append(self.position_limits_disable)
+        self.update_list.append(self.phase_mode)
+        self.update_list.append(self.idir)
         layout.addLayout(boollayout)
         
         
@@ -714,6 +707,8 @@ class CalibrateTab(MotorTab):
         olayout.addWidget(self.obias)
         olayout.addWidget(self.oposition)
         olayout.addWidget(self.odir)
+        self.update_list.append(self.obias)
+        self.update_list.append(self.odir)
         layout.addLayout(olayout)
 
         self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)", "also calls set_startup_bias\nstartup_param.motor_encoder_bias")
@@ -725,6 +720,8 @@ class CalibrateTab(MotorTab):
         mlayout.addWidget(self.mbias)
         mlayout.addWidget(self.mposition)
         mlayout.addWidget(self.mdir)
+        self.update_list.append(self.mbias)
+        self.update_list.append(self.mdir)
         layout.addLayout(mlayout)
 
         self.tbias = APIEdit("tbias", "torque bias (Nm)", "main_loop_param.torque_sensor.bias")
@@ -734,6 +731,8 @@ class CalibrateTab(MotorTab):
         tlayout.addWidget(self.tbias)
         tlayout.addWidget(self.torque)
         tlayout.addWidget(self.tdir)
+        self.update_list.append(self.tbias)
+        self.update_list.append(self.tdir)
         layout.addLayout(tlayout)
 
         line = QFrame()
@@ -756,21 +755,9 @@ class CalibrateTab(MotorTab):
 
     def update(self):
         super(CalibrateTab, self).update()
-        self.index_offset.update()
-        self.current_d.update()
-        self.phase_lock_current_startup.update()
         self.oposition.setNumber(self.status.joint_position)
         self.mposition.setNumber(self.status.motor_position)
-        self.odir.update()
-        self.idir.update()
         self.torque.setNumber(self.status.torque)
-        self.obias.update()
-        self.mbias.update()
-        self.mdir.update()
-        self.phase_mode.update()
-        self.position_limits_disable.update()
-        self.tbias.update()
-        self.tdir.update()
 
     def phase_lock(self):
         print("phase lock")
@@ -875,6 +862,74 @@ class MainWindow(QMainWindow):
        # self.last_tuning_tab.pause()
         #self.tuning_tab.widget(index).unpause()
         #self.last_tuning_tab = self.tuning_tab.widget(index)
+
+
+class BodeWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.label = QLabel("Bode plot")
+        layout.addWidget(self.label)
+        self.mag_chart = self.Chart()
+        layout.addWidget(self.mag_chart.chart_view)
+        self.phase_chart = self.Chart()
+        self.phase_chart.axis_y.setTitleText("phase (deg)")
+        layout.addWidget(self.phase_chart.chart_view)
+        self.setLayout(layout)
+        self.set_frequency_limits()
+        self.set_magnitude_limits()
+        self.set_phase_limits()
+
+    def append(self, frequency, magnitude, phase):
+        if frequency > 0:
+            data = QPointF(frequency, 20*np.log10(magnitude))
+            data_phase = QPointF(frequency, phase)
+            self.mag_chart.series.append(data)
+            self.phase_chart.series.append(data_phase)
+    
+    def set_frequency_limits(self, range_min = 100, range_max = 10000):
+        self.mag_chart.axis_x.setRange(range_min, range_max)
+        self.phase_chart.axis_x.setRange(range_min, range_max)
+
+    def set_magnitude_limits(self, range_min = -20, range_max = 10):
+        self.mag_chart.axis_y.setRange(range_min, range_max)
+
+    def set_phase_limits(self, range_min = -200, range_max = 0):
+        self.phase_chart.axis_y.setRange(range_min, range_max)
+
+
+    class Chart(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.chart = QChart()
+            self.chart_view = QChartView(self.chart)
+            self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+            self.series = QLineSeries()
+            self.series.setUseOpenGL(True)
+            self.chart.addSeries(self.series)
+            self.axis_x = QLogValueAxis()
+            self.axis_x.setMinorTickCount(10)
+            self.axis_x.setTitleText("frequency (Hz)")
+            self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
+            self.series.attachAxis(self.axis_x)
+            self.axis_y = QValueAxis()
+            self.axis_y.setTickCount(10)
+            self.axis_y.setTitleText("magnitude (20*log10(mag))")
+            self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
+            self.series.attachAxis(self.axis_y)
+
+            self.chart_view.setMouseTracking(True)
+            self.chart_view.viewport().installEventFilter(self)
+
+        def eventFilter(self, obj, event):
+            if obj is self.chart_view.viewport() and event.type() == QEvent.MouseMove:
+                lp = event.pos()
+                sp = self.chart_view.mapToScene(lp)
+                vp = self.chart_view.chart().mapToValue(sp)
+                print(vp)
+            return super().eventFilter(obj, event)
+            
+            
 
 class CurrentTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -1059,11 +1114,8 @@ class CurrentTuningTab(MotorTab):
 
             if self.command.current_tuning.mode == motor.TuningMode.Chirp:
                 # plot bode
-                data = QPointF(self.freq[fmeas_mi], 20*np.log10(np.abs(mag_meas/mag_des)))
-                data_phase = QPointF(self.freq[fmeas_mi], phase_deg)
-                if (data.x() > 0):
-                    self.bode_window.mag_chart.series.append(data)
-                    self.bode_window.phase_chart.series.append(data_phase)
+                self.bode_window.append(self.freq[fmeas_mi], np.abs(mag_meas/mag_des), phase_deg)
+
 
          
             # plot timeseries
@@ -1117,52 +1169,18 @@ class CurrentTuningTab(MotorTab):
     def mode_update(self, selection):
         self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
         if self.command.current_tuning.mode == motor.TuningMode.Chirp:
-            self.bode_window = self.BodeWindow()
+            self.bode_window = BodeWindow()
             self.bode_window.show()
         self.command_update()
 
-    class BodeWindow(QWidget):
-        def __init__(self):
-            super().__init__()
-            layout = QVBoxLayout()
-            self.label = QLabel("Bode plot")
-            layout.addWidget(self.label)
-            self.mag_chart = self.Chart()
-            layout.addWidget(self.mag_chart.chart_view)
-            self.phase_chart = self.Chart()
-            self.phase_chart.axis_y.setRange(-200, 0)
-            self.phase_chart.axis_y.setTitleText("phase (deg)")
-            layout.addWidget(self.phase_chart.chart_view)
-            self.setLayout(layout)
-
-        class Chart(QWidget):
-            def __init__(self):
-                super().__init__()
-                self.chart = QChart()
-                self.chart_view = QChartView(self.chart)
-                self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
-                self.series = QLineSeries()
-                self.series.setUseOpenGL(True)
-                self.chart.addSeries(self.series)
-                self.axis_x = QLogValueAxis()
-                self.axis_x.setMinorTickCount(10)
-                self.axis_x.setTitleText("frequency (Hz)")
-                self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
-                self.series.attachAxis(self.axis_x)
-                self.axis_y = QValueAxis()
-                self.axis_y.setTickCount(10)
-                self.axis_y.setTitleText("magnitude (20*log10(mag))")
-                self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
-                self.series.attachAxis(self.axis_y)
-                self.axis_y.setRange(-20, 10)
-                self.axis_x.setRange(100,10000)
 
 class StreamingChart(QChartView):
     def __init__(self, num_lines=1, *args, **kwargs):
         self.chart = QChart()
         super(StreamingChart, self).__init__(self.chart, *args, **kwargs)
         self.setRubberBand(QChartView.VerticalRubberBand)
-        self.num_lines = num_lines  
+        self.num_lines = num_lines
+        self.length = 500
         
         self.axis_x = QValueAxis()
         self.axis_x.setTickCount(10)
@@ -1189,17 +1207,21 @@ class StreamingChart(QChartView):
             max1 = float("-inf")
             for i in range(self.num_lines):
                 self.series[i].append(t, data[i])
-                if len(self.series[i]) > 200:
+                if len(self.series[i]) > self.length:
                     self.series[i].remove(0)
                 min1 = min(min1,min([d.y() for d in self.series[i].pointsVector()]))
                 max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
 
             self.axis_y.setMin(min1)
             self.axis_y.setMax(max1)
-            self.axis_x.setMax(t)
-            self.axis_x.setMin(self.series[0].at(0).x())
+            self.axis_x.setMax(max([d.x() for d in self.series[0].pointsVector()]))
+            self.axis_x.setMin(min([d.x() for d in self.series[0].pointsVector()]))
         except ValueError:
             pass
+    
+    def removePoints(self):
+        for i in range(self.num_lines):
+            self.series[i].removePoints(0,self.series[i].count())
 
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -1307,6 +1329,11 @@ class PositionTuningTab(MotorTab):
 
     def mode_update(self, selection):
         self.command.position_tuning.mode = int(motor.TuningMode.__members__[selection])
+        if self.command.position_tuning.mode == motor.TuningMode.Chirp:
+            self.bode_window = BodeWindow()
+            self.bode_window.set_frequency_limits(1, 500)
+            self.bode_window.set_magnitude_limits(-40,10)
+            self.bode_window.show()
         self.command_update()
 
 app = QApplication(sys.argv)
