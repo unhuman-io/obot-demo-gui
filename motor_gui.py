@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
     QRadioButton
 )
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
-from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis, QLogValueAxis
+from PyQt5.QtChart import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QLogValueAxis
 import motor
 import numpy as np
 from io import StringIO
@@ -264,6 +264,26 @@ class StatusCombo(QWidget):
     def editingFinished(self):
         self.signal.emit(self.combo_box.currentText(), self.text_widget.text())
 
+Kc = np.matrix([[2.0/3, -1.0/3, -1.0/3], [0, 1.0/np.sqrt(3), -1.0/np.sqrt(3)]])
+
+def calculate_vq(pos, va, vb, vc):
+    cos_t = np.cos(pos)
+    sin_t = np.sin(pos)
+
+    valpha_beta = (Kc*np.asmatrix(np.block([va,vb,vc])).transpose()).transpose()*1.5
+    vd = np.asarray(cos_t) * np.asarray(valpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(valpha_beta[:,1])
+    vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
+    return (vd, vq)
+
+def calculate_iq(pos, ia, ib, ic):
+    cos_t = np.cos(pos)
+    sin_t = np.sin(pos)
+
+    ialpha_beta = (Kc*np.asmatrix(np.block([ia,ib,ic])).transpose()).transpose()
+    id = np.asarray(cos_t) * np.asarray(ialpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(ialpha_beta[:,1])
+    iq = np.asarray(sin_t) * np.asarray(ialpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(ialpha_beta[:,1])
+    return (id, iq)
+
 class MotorTab(QWidget):
     def __init__(self, *args, **kwargs):
         super(MotorTab, self).__init__(*args, **kwargs)
@@ -498,7 +518,7 @@ class PlotTab2(MotorTab):
         self.mcu_timestamp = s.mcu_timestamp
         val = current_motor()[self.combo_box.currentText()].get()
         try:
-            self.chart.update(self.t_seconds, float(val))
+            self.chart.update(self.t_seconds, [float(val)])
             val2 = np.array([d.y() for d in self.chart.series[0].pointsVector()])
             self.std.setNumber(np.std(val2))
             self.mean.setNumber(np.mean(val2))
@@ -828,6 +848,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(CalibrateTab(), "calibrate")
         self.tabs.addTab(CurrentTuningTab(), "current tuning")
         self.tabs.addTab(PositionTuningTab(), "position tuning")
+        self.tabs.addTab(StepperTab(), "stepper")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
@@ -1175,7 +1196,7 @@ class CurrentTuningTab(MotorTab):
 
 
 class StreamingChart(QChartView):
-    def __init__(self, num_lines=1, *args, **kwargs):
+    def __init__(self, num_lines=1, linetype=QLineSeries, *args, **kwargs):
         self.chart = QChart()
         super(StreamingChart, self).__init__(self.chart, *args, **kwargs)
         self.setRubberBand(QChartView.VerticalRubberBand)
@@ -1195,7 +1216,7 @@ class StreamingChart(QChartView):
         #self.axis_y.setTitleText("Motor velocity (rad/s)")
         self.series = [1] * num_lines
         for i in range(num_lines):
-            self.series[i] = QLineSeries()
+            self.series[i] = linetype()
             self.series[i].setUseOpenGL(True)
             self.chart.addSeries(self.series[i])
             self.series[i].attachAxis(self.axis_x)
@@ -1335,6 +1356,113 @@ class PositionTuningTab(MotorTab):
             self.bode_window.set_magnitude_limits(-40,10)
             self.bode_window.show()
         self.command_update()
+
+class StepperTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(StepperTab, self).__init__(*args, **kwargs)
+        self.update_time = 10
+
+        self.name = "stepper_velocity"
+        self.current = 0.
+        self.velocity = 0.
+        self.num_poles = float(current_motor()["num_poles"].get())
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.current_slider = NumberEditSlider("current (A)")
+        self.current_slider.slider.setMinimum(0)
+        self.current_slider.slider.setMaximum(20)
+        self.current_slider.slider.setPageStep(1)
+        self.current_slider.signal.connect(self.current_update)
+        layout.addWidget(self.current_slider)
+
+        self.velocity_slider = NumberEditSlider("velocity (rad/s)")
+        self.velocity_slider.slider.setMinimum(-200)
+        self.velocity_slider.slider.setMaximum(200)
+        self.velocity_slider.slider.setPageStep(5)
+        self.velocity_slider.signal.connect(self.velocity_update)
+        layout.addWidget(self.velocity_slider)
+
+        self.num_points = NumberEdit("Number of plot points")
+        self.num_points.signal.connect(self.num_points_update)
+        layout.addWidget(self.num_points)
+        
+
+        self.current_chart = StreamingChart(5, QScatterSeries)
+        layout.addWidget(self.current_chart)
+        self.voltage_chart = StreamingChart(5, QScatterSeries)
+        layout.addWidget(self.voltage_chart)
+        
+        self.num_points.setNumber(self.current_chart.length)
+
+        self.setLayout(layout)
+        self.mcu_timestamp = 0
+        self.t_seconds = 0
+        self.current_chart.series[0].setName("a")
+        self.current_chart.series[1].setName("b")
+        self.current_chart.series[2].setName("c")
+        self.current_chart.series[3].setName("d")
+        self.current_chart.series[4].setName("q")
+        self.current_chart.axis_y.setTitleText("current (A)")
+        self.voltage_chart.series[0].setName("a")
+        self.voltage_chart.series[1].setName("b")
+        self.voltage_chart.series[2].setName("c")
+        self.voltage_chart.series[3].setName("d")
+        self.voltage_chart.series[4].setName("q")
+        self.voltage_chart.axis_y.setTitleText("voltage (V)")
+
+        for series in self.current_chart.series + self.voltage_chart.series:
+            series.setMarkerSize(5)
+
+    def update(self):
+        super(StepperTab, self).update()
+        
+        dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
+        self.t_seconds += dt
+        self.mcu_timestamp = self.status.mcu_timestamp
+
+        status = current_motor()["fast_loop_status"].get()
+        data = np.genfromtxt(StringIO(status), delimiter=",")
+        motor_pos = data[1]
+        iq_des = data[2]
+        iq_meas = data[3]
+        ia = data[4]
+        ib = data[5]
+        ic = data[6]
+        va = data[7]
+        vb = data[8]
+        vc = data[9]
+
+        (vd, vq) = calculate_vq(motor_pos*self.num_poles, va, vb, vc)
+        (id, iq) = calculate_iq(motor_pos*self.num_poles, ia, ib, ic)
+
+        x = np.mod(motor_pos,2*np.pi/self.num_poles)
+        self.current_chart.update(x, [ia, ib, ic, id, iq_meas])
+        self.voltage_chart.update(x, [va, vb, vc, vd, vq])
+  
+
+
+    def command_update(self):
+        motor_manager.set_command_stepper_velocity(current=self.current, velocity=self.velocity)
+        motor_manager.write_saved_commands()
+
+    def current_update(self):
+        self.current = float(self.current_slider.number_widget.text())
+        print("current: {}".format(self.current))
+        self.command_update()
+        self.current_chart.removePoints()
+        self.voltage_chart.removePoints()
+
+    def velocity_update(self):
+        self.velocity = float(self.velocity_slider.number_widget.text())
+        self.command_update()
+    
+    def num_points_update(self, value):
+        self.current_chart.length = int(value)
+        self.voltage_chart.length = int(value)
+        self.current_chart.removePoints()
+        self.voltage_chart.removePoints()
+
 
 app = QApplication(sys.argv)
 
