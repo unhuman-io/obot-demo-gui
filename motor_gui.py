@@ -2,6 +2,8 @@
 
 import sys
 import traceback
+import os
+import glob
 
 from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
 from PyQt5.QtWidgets import (
@@ -22,7 +24,9 @@ from PyQt5.QtWidgets import (
     QMenu,
     QPlainTextEdit,
     QFrame,
-    QRadioButton
+    QRadioButton,
+    QFileDialog,
+    QTextEdit
 )
 
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
@@ -39,6 +43,7 @@ if(robot_config_path is None or obot_path is None):
 
 # Assumes the .py files live in motorlib/scripts
 sys.path.append(obot_path + "/../motorlib/scripts")
+sys.path.append(robot_config_path + "/../../calibration")
 
 import motor
 import numpy as np
@@ -318,9 +323,21 @@ class MotorTab(QWidget):
     def update(self):
         global motor_manager
         #print("update: " + self.name)
-        self.status = motor_manager.read()[0]
         for item in self.update_list:
             item.update()
+        # If the update fails due to not being able to read from the device
+        # try to refresh the window mup to 5 times - this will reconnect any motors
+        num_retries = 0
+        while num_retries < 5:
+            try:
+                self.status = motor_manager.read()[0]
+                break
+            except RuntimeError:
+                window.refresh()
+                num_retries +=1
+        else:
+            raise RuntimeError("Failed to reconnect")
+
 
     def pause(self):
         self.timer.stop()
@@ -699,9 +716,22 @@ class BringupTab(MotorTab):
         self.name = "bringup"
         self.updating_enabled = True
         self.motor_handler = None
+        self.package_info = None
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        project_layout = QHBoxLayout()
+        projects = []
+        self.projects_combo_box = QComboBox(self)
+        for root,d_names,f_names in os.walk(f"{os.path.expanduser('~')}"):
+            if "project-x" in d_names:
+                print (root, d_names, f_names)
+                projects.append(f"{root}/project-x")
+        self.projects_combo_box.addItems(projects)
+        self.projects_combo_box.currentIndexChanged.connect(self.set_projectx)
+        project_layout.addWidget(self.projects_combo_box)
+        layout.addLayout(project_layout)
 
         select_params_layout = QHBoxLayout()
         self.config_combo_box = QComboBox()
@@ -710,14 +740,20 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.config_combo_box)
 
         self.fw_type_combo_box = QComboBox()
-        fw_types = ["motor_aksim", "motor_aksim_19_17", "motor_aksim_19_18", "motor_aksim_20_19"]
+        fw_types = ["motor_aksim", "motor_aksim_19_17", "motor_aksim_19_18", "motor_aksim_20_19", "motor_aksim_20_19_2z1p", "motor_aksim_2z1p"]
         self.fw_type_combo_box.addItems(fw_types)
         select_params_layout.addWidget(self.fw_type_combo_box)
 
         self.board_type_combo_box = QComboBox()
-        board_types = ["MR0P", "MR0"]
-        self.board_type_combo_box.addItems(board_types)
+        self.board_types_dict = {"MR0P - Green": "MR0P", "MR0 - Red": "MR0", "MR1 - Blue":"MR1", "MR2":"MR2"}
+        self.board_type_combo_box.addItems(self.board_types_dict.keys())
         select_params_layout.addWidget(self.board_type_combo_box)
+        layout.addLayout(select_params_layout)
+
+        self.tcell_combo_box = QComboBox()
+        self.tcell_dict = {"Figure_gen1": "-DMAX11254_TORQUE_SENSOR", "Futek":"-DIGNORE_QIA128_CALIBRATION", "NMB":"-DADS8339_TORQUE_SENSOR", "NA":""}
+        self.tcell_combo_box.addItems(self.tcell_dict.keys())
+        select_params_layout.addWidget(self.tcell_combo_box)
         layout.addLayout(select_params_layout)
 
         self.compile_opts_combo_box = QComboBox()
@@ -744,19 +780,43 @@ class BringupTab(MotorTab):
 
         layout.addLayout(buttons_layout)
 
+        self.save_to_package_btn = QPushButton("Save to Package")
+        self.save_to_package_btn.clicked.connect(self.save_to_package)
+        layout.addWidget(self.save_to_package_btn)
+
         self.setLayout(layout)
+
+    def set_projectx(self):
+        self.project_x = self.projects_combo_box.currentText()
 
     def update(self):
         super(BringupTab, self).update()
 
+    def save_to_package(self):
+        self.file_dialog = QFileDialog(self)
+        self.file_dialog.setDirectory(f"{self.project_x}/tools/obot")
+        self.file_dialog.setFileMode(QFileDialog.ExistingFile)
+        if self.file_dialog.exec_():
+            self.robot_package = self.file_dialog.selectedFiles()[0]
+            self.update_motor_handler()
+            if(self.package_info is not None):
+                # Update package_infor by running update_motor_handler
+                with open(self.robot_package, 'a+') as file:
+                    # Append a line to the file
+                    print(f"appending {self.package_info} to {self.robot_package}")
+                    file.write(f'  - [{self.package_info}]')
+
+
     def update_motor_handler(self):
         self.fw_type = self.fw_type_combo_box.currentText()
-        self.board_type = self.board_type_combo_box.currentText()
+        self.board_type = self.board_types_dict[self.board_type_combo_box.currentText()]
         self.compile_opts = self.compile_opts_combo_box.currentText()
+        self.tcell_type = self.tcell_dict[self.tcell_combo_box.currentText()]
         self.motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
         self.serial_number = current_motor().serial_number()
-        motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts}\'", "sn":current_motor().serial_number()}}
-        print(motor_info)
+        self.package_info = f"\"{current_motor().serial_number()}\", \"{self.fw_type}\", \"{self.motor_name}\", \"\'{self.board_type} {self.compile_opts} {self.tcell_type}\'\""
+        print(self.package_info)
+        motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts} {self.tcell_type}\'", "sn":current_motor().serial_number()}}
         self.motor_handler = MotorHandler( robot_config_path,
                                             None,
                                             motor_info,
