@@ -339,6 +339,12 @@ class FaultTab(MotorTab):
         outer_layout.addLayout(layout)
 
         layout2 = QVBoxLayout()
+        for mode in motor.ModeDesired:
+            button = QPushButton(mode)
+            self.mode_buttons.append(button)
+            layout.addWidget(button)
+            button.clicked.connect()
+            set color
         self.button = QPushButton("driver_enable")
         self.button.clicked.connect(self.driver_enable)
         layout2.addWidget(self.button)
