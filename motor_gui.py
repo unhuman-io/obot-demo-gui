@@ -264,6 +264,23 @@ class StatusCombo(QWidget):
     def editingFinished(self):
         self.signal.emit(self.combo_box.currentText(), self.text_widget.text())
 
+class ModeButton(QPushButton):
+    def __init__(self, *args, **kwargs):
+        super(ModeButton, self).__init__(*args, **kwargs)
+        self.clicked.connect(self.mode_click)
+
+    def mode_click(self, event):
+        motor_manager.clear_commands()
+        motor_manager.set_command_mode(motor.ModeDesired.__members__[self.text()])
+        motor_manager.write_saved_commands()
+
+def get_mode_color(name):
+    color_replace = {'azure': 'cornflowerblue'}
+    color =  motor.mode_color(motor.ModeDesired.__members__[name])
+    if color in color_replace:
+        color = color_replace[color]
+    return color
+
 Kc = np.matrix([[2.0/3, -1.0/3, -1.0/3], [0, 1.0/np.sqrt(3), -1.0/np.sqrt(3)]])
 
 def calculate_vq(pos, va, vb, vc):
@@ -339,22 +356,14 @@ class FaultTab(MotorTab):
         outer_layout.addLayout(layout)
 
         layout2 = QVBoxLayout()
-        for mode in motor.ModeDesired:
-            button = QPushButton(mode)
-            self.mode_buttons.append(button)
-            layout.addWidget(button)
-            button.clicked.connect()
-            set color
-        self.button = QPushButton("driver_enable")
-        self.button.clicked.connect(self.driver_enable)
-        layout2.addWidget(self.button)
+        for name, val in motor.ModeDesired.__members__.items():
+            button = ModeButton(name)   
+            button.setStyleSheet("background-color: " + get_mode_color(name))
+            layout2.addWidget(button)
+ 
+        layout2.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
         outer_layout.addLayout(layout2)
         self.setLayout(outer_layout)
-
-    def driver_enable(self):
-        print("driver enable")
-        motor_manager.set_command_mode(motor.ModeDesired.DriverEnable)
-        motor_manager.write_saved_commands()
 
 
     def update(self):
@@ -362,6 +371,7 @@ class FaultTab(MotorTab):
 
         mask = current_motor().error_mask()
         self.faults[0].button.setText("mode: " + self.status.flags.mode.name.lower())
+        self.faults[0].button.setStyleSheet("background-color: " + get_mode_color(self.status.flags.mode.name))
         faults = self.status.flags.error.bits
         for widget in self.faults:
             widget.update(faults, mask)
