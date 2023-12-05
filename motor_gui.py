@@ -26,24 +26,12 @@ from PyQt5.QtWidgets import (
     QFrame,
     QRadioButton,
     QFileDialog,
-    QTextEdit
+    QTextEdit,
+    QMessageBox
 )
 
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QLogValueAxis
-
-# Read the environment variables
-robot_config_path = os.getenv('ROBOT_CONFIG_PATH')
-obot_path = os.getenv('OBOT_PATH')
-
-if(robot_config_path is None or obot_path is None):
-    print("Please define ROBOT_CONFIG_PATH and OBOT_PATH environment variables."\
-          "Run the following commands with the correct user path`export ROBOT_CONFIG_PATH=/home/user-path/project-x/tools/obot/robot01_parameters` \
-           and `export OBOT_PATH=/home/user-path/obot-controller/obot-g474`")
-
-# Assumes the .py files live in motorlib/scripts
-sys.path.append(obot_path + "/../motorlib/scripts")
-sys.path.append(robot_config_path + "/../../calibration")
 
 import motor
 import numpy as np
@@ -54,7 +42,6 @@ import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 motor_manager = None
-
 
 
 def current_motor():
@@ -712,12 +699,14 @@ class BringupTab(MotorTab):
         self.projects_combo_box.addItems(projects)
         self.projects_combo_box.currentIndexChanged.connect(self.set_projectx)
         project_layout.addWidget(self.projects_combo_box)
+
+        self.robot_combo_box = QComboBox(self)
+        self.robot_combo_box.currentIndexChanged.connect(self.set_robot_path)
+        project_layout.addWidget(self.robot_combo_box)
         layout.addLayout(project_layout)
 
         select_params_layout = QHBoxLayout()
         self.config_combo_box = QComboBox()
-        files = os.listdir(robot_config_path)
-        self.config_combo_box.addItems(files)
         select_params_layout.addWidget(self.config_combo_box)
 
         self.fw_type_combo_box = QComboBox()
@@ -769,6 +758,11 @@ class BringupTab(MotorTab):
 
     def set_projectx(self):
         self.project_x = self.projects_combo_box.currentText()
+        self.robot_combo_box.addItems(os.listdir(self.project_x + "/tools/obot"))
+
+    def set_robot_path(self):
+        self.robot_config_path = self.project_x + "/tools/obot/" + self.robot_combo_box.currentText()
+        self.config_combo_box.addItems(os.listdir(self.robot_config_path))
 
     def update(self):
         super(BringupTab, self).update()
@@ -785,7 +779,13 @@ class BringupTab(MotorTab):
                 with open(self.robot_package, 'a+') as file:
                     # Append a line to the file
                     print(f"appending {self.package_info} to {self.robot_package}")
-                    file.write(f'  - [{self.package_info}]')
+                    try:
+                        file.write(f'\n  - [{self.package_info}]')
+                        QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
+                    except Exception as e:
+                        QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+
 
 
     def update_motor_handler(self):
@@ -798,10 +798,13 @@ class BringupTab(MotorTab):
         self.package_info = f"\"{current_motor().serial_number()}\", \"{self.fw_type}\", \"{self.motor_name}\", \"\'{self.board_type} {self.compile_opts} {self.tcell_type}\'\""
         print(self.package_info)
         motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts} {self.tcell_type}\'", "sn":current_motor().serial_number()}}
-        self.motor_handler = MotorHandler( robot_config_path,
-                                            None,
-                                            motor_info,
-                                            self.motor_name)
+        try:
+            self.motor_handler = MotorHandler( self.robot_config_path,
+                                                None,
+                                                motor_info,
+                                                self.motor_name)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def run_flash_params_routine(self):
         print("Flash param binary")
@@ -809,9 +812,16 @@ class BringupTab(MotorTab):
 
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         self.updating_enabled = False
-        self.motor_handler.run_flash_params_routine()
-        # Wait for the device to show up again
-        time.sleep(6)
+
+        try:
+            self.motor_handler.run_flash_params_routine()
+            QMessageBox.information(self, "Success", "The operation was successful!")
+            # Wait for the device to show up again
+            time.sleep(6)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+
         # Reenable updates
         self.updating_enabled = True
 
@@ -821,9 +831,13 @@ class BringupTab(MotorTab):
 
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         self.updating_enabled = False
-        self.motor_handler.run_flash_firmware_routine()
-        # Wait for the device to show up again
-        time.sleep(6)
+        try:
+            self.motor_handler.run_flash_firmware_routine()
+            QMessageBox.information(self, "Success", "The operation was successful!")
+            # Wait for the device to show up again
+            time.sleep(6)  
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
         # Reenable updates
         self.updating_enabled = True
 
@@ -833,9 +847,12 @@ class BringupTab(MotorTab):
 
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         self.updating_enabled = False
-        self.motor_handler.run_flash_all_routine()
-        # Wait for the device to show up again
-        time.sleep(6)
+        try:
+            self.motor_handler.run_flash_all_routine()
+            # Wait for the device to show up again
+            time.sleep(6)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
         # Reenable updates
         self.updating_enabled = True
 
@@ -954,19 +971,34 @@ class CalibrateTab(MotorTab):
         self.find_limits_button.clicked.connect(self.find_limits)
         layout.addWidget(self.find_limits_button)
 
+        project_layout = QHBoxLayout()
+        projects = []
+        self.projects_combo_box = QComboBox(self)
+        for root,d_names,f_names in os.walk(f"{os.path.expanduser('~')}"):
+            if "project-x" in d_names:
+                print (root, d_names, f_names)
+                projects.append(f"{root}/project-x")
+        self.projects_combo_box.addItems(projects)
+        self.projects_combo_box.currentIndexChanged.connect(self.set_projectx)
+        project_layout.addWidget(self.projects_combo_box)
+
+        self.robot_combo_box = QComboBox(self)
+        self.robot_combo_box.currentIndexChanged.connect(self.update_config_file_combo_box)
+        project_layout.addWidget(self.robot_combo_box)
+        layout.addLayout(project_layout)
+
+        self.config_combo_box = QComboBox()
+        self.last_motor = None
+        self.current_motor_config_files = []
+        # self.update_config_file_combo_box()
+        project_layout.addWidget(self.config_combo_box)
+        layout.addLayout(project_layout)
+
         save_to_flash_layout = QHBoxLayout()
         self.button = QPushButton("Save runtime values to flash")
         self.button.setToolTip("Save to flash")
         self.button.clicked.connect(self.run_read_runtime_and_save_to_flash_routine)
         save_to_flash_layout.addWidget(self.button)
-        layout.addLayout(save_to_flash_layout)
-
-        self.combo_box = QComboBox()
-        self.all_config_files = os.listdir(robot_config_path)
-        self.last_motor = None
-        self.current_motor_config_files = []
-        self.update_config_file_combo_box()
-        save_to_flash_layout.addWidget(self.combo_box)
         layout.addLayout(save_to_flash_layout)
 
         self.setLayout(layout)
@@ -977,17 +1009,16 @@ class CalibrateTab(MotorTab):
         self.mposition.setNumber(self.status.motor_position)
         self.torque.setNumber(self.status.torque)
 
+    def set_projectx(self):
+        self.project_x = self.projects_combo_box.currentText()
+        self.robot_combo_box.addItems(os.listdir(self.project_x + "/tools/obot"))
+
     def update_config_file_combo_box(self):
-        if self.last_motor is None or self.last_motor not in current_motor().name():
-            print(f"Previously: {self.last_motor}, Currently: {current_motor().name()}")
-            self.current_motor_config_files = []
-            self.combo_box.clear()
-            for item in self.all_config_files:
-                names = [current_motor().name(), "_".join(current_motor().name().split("_")[:-1])]
-                if ( (names[0] in item) or (names[1] in item)):
-                    self.current_motor_config_files.append(item)
-                    self.combo_box.insertItem(self.combo_box.count(), item)
-        self.last_motor = current_motor().name()
+        print("****RUN")
+        self.robot_config_path = self.project_x + "/tools/obot/" + self.robot_combo_box.currentText()
+        print(self.robot_config_path)
+        self.config_combo_box.clear()
+        self.config_combo_box.addItems(os.listdir(self.robot_config_path))
 
     def phase_lock(self):
         print("phase lock")
@@ -1017,9 +1048,9 @@ class CalibrateTab(MotorTab):
 
     def run_read_runtime_and_save_to_flash_routine(self):
         print("Reading runtime values and saving to flash")
-        motor_name = os.path.splitext(self.combo_box.currentText())[0]
+        motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
         motor_info = {motor_name :{"fw_type": None, "pcb_type": None, "sn":current_motor().serial_number()}}
-        self.motor_handler = MotorHandler( robot_config_path,
+        self.motor_handler = MotorHandler( self.robot_config_path,
                                             None,
                                             motor_info,
                                             motor_name)
