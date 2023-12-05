@@ -1033,8 +1033,8 @@ class CalibrateTab(MotorTab):
         self.robot_combo_box.addItems(os.listdir(self.project_x + "/tools/obot"))
 
     def update_config_file_combo_box(self):
-        print("****RUN")
         self.robot_config_path = self.project_x + "/tools/obot/" + self.robot_combo_box.currentText()
+        print(f"Setting tobot_config_path to: {self.robot_config_path}")
         print(self.robot_config_path)
         self.config_combo_box.clear()
         self.config_combo_box.addItems(os.listdir(self.robot_config_path))
