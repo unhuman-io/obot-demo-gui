@@ -97,6 +97,7 @@ class APIEdit(NumberEdit):
         else:
             tooltip = "api: {}\n{}".format(name, tooltip)
         super(APIEdit, self).__init__(name, description, tooltip, *args, **kwargs)
+        self.populate_value()
         
     def editingFinished(self):
         current_motor()[self.name] = self.number_widget.text()
@@ -104,8 +105,11 @@ class APIEdit(NumberEdit):
     
     def update(self):
         if not self.number_widget.hasFocus():
-            val = current_motor()[self.name].get()
-            self.number_widget.setText(val)
+            self.populate_value()
+
+    def populate_value(self):
+        val = current_motor()[self.name].get()
+        self.number_widget.setText(val)
 
 class APIDisplay(APIEdit):
     def __init__(self, *args, **kwargs):
