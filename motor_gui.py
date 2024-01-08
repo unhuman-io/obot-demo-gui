@@ -826,13 +826,26 @@ class MainWindow(QMainWindow):
         self.menu_bar = QMenuBar(self)
         self.motor_menu = QMenu("&Motor")
         self.menu_bar.addMenu(self.motor_menu)
+        self.motor_ip_menu = QMenu("Motor&IP")
+        self.menu_bar.addMenu(self.motor_ip_menu)
         self.setMenuBar(self.menu_bar)
         actions = []
         for m in motors:
             actions.append(self.motor_menu.addAction(m.name()))
             print(m.name())
         self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
-        self.connect_motor(motors[0].name())
+
+        ips = ["192.168.1.200:7770", "192.168.1.200:7771", "192.168.1.200:7772", "192.168.1.200:7773", "192.168.1.200:7774", "192.168.1.200:7775", 
+               "192.168.50.2:7770", "192.168.50.2:7771", "192.168.50.2:7772", "192.168.50.2:7773", "192.168.50.2:7774", "192.168.50.2:7775", 
+               "192.168.50.3:7770", "192.168.50.3:7771", "192.168.50.3:7772", "192.168.50.3:7773", "192.168.50.3:7774", "192.168.50.3:7775"]
+        for ip in ips:
+            self.motor_ip_menu.addAction(ip)
+        self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
+
+        if len(motors):
+            self.connect_motor(motors[0].name())
+        else:
+            self.connect_motor_ip(ips[0])
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -864,6 +877,16 @@ class MainWindow(QMainWindow):
         self.tuning_tab.currentChanged.connect(self.new_tuning_tab)
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
+
+    def connect_motor_ip(self, ip):
+        global cpu_frequency
+        print("Connecting motor " + ip)
+        motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
+        motor_manager.set_auto_count()
+        current_motor()["api_timeout"] = "100000"
+        current_motor().set_timeout_ms(500)
+        self.setWindowTitle(ip + " sn:" + current_motor().serial_number())
+        cpu_frequency = current_motor().get_cpu_frequency()
 
     def connect_motor(self, name):
          global cpu_frequency
