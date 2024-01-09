@@ -414,8 +414,10 @@ class StatusTab(MotorTab):
     def set_field_options(self):
         self.field_names = sorted(current_motor().get_api_options())
         for i in range(10):
+            current_text = self.statuses[i].combo_box.currentText()
             self.statuses[i].combo_box.clear()
             self.statuses[i].combo_box.addItems(self.field_names)
+            self.statuses[i].combo_box.setCurrentText(current_text)
 
 
 class PlotTab(MotorTab):
@@ -538,8 +540,10 @@ class PlotTab2(MotorTab):
 
     def set_field_options(self):
         self.field_names = sorted(current_motor().get_api_options())
+        current_text = self.combo_box.currentText()
         self.combo_box.clear()
         self.combo_box.addItems(self.field_names)
+        self.combo_box.setCurrentText(current_text)
 
 class VelocityTab(MotorTab):
     def __init__(self, *args, **kwargs):
