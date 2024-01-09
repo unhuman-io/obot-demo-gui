@@ -373,7 +373,7 @@ class StatusTab(MotorTab):
         self.name = "status"
         #print("init: " + self.name)
         #self.field_names = current_motor()["help"].get().split('\n')
-        self.field_names = sorted(current_motor().get_api_options())
+        
 
         self.statuses = []
         layout = QVBoxLayout()
@@ -384,7 +384,7 @@ class StatusTab(MotorTab):
             self.statuses[i].layout.setContentsMargins(QMargins(0,0,0,0))
             layout.addWidget(self.statuses[i])
             self.statuses[i].signal.connect(self.valueEdit)
-            self.statuses[i].combo_box.addItems(self.field_names)
+        self.set_field_options()
         self.statuses[0].combo_box.setCurrentText("vbus")
         self.statuses[1].combo_box.setCurrentText("5V")
         self.statuses[2].combo_box.setCurrentText("3v3")
@@ -409,6 +409,17 @@ class StatusTab(MotorTab):
             if not status.text_widget.hasFocus():
                 val = current_motor()[status.combo_box.currentText()].get()
                 status.setText(val)
+
+    def unpause(self):
+        self.set_field_options()
+        return super().unpause()
+
+
+    def set_field_options(self):
+        self.field_names = sorted(current_motor().get_api_options())
+        for i in range(10):
+            self.statuses[i].combo_box.clear()
+            self.statuses[i].combo_box.addItems(self.field_names)
 
 
 class PlotTab(MotorTab):
@@ -490,8 +501,7 @@ class PlotTab2(MotorTab):
         self.chart = StreamingChart()
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
-        self.field_names = sorted(current_motor().get_api_options())
-        self.combo_box.addItems(self.field_names)
+        self.set_field_options()
         self.layout.addWidget(self.combo_box)
         self.combo_box.setCurrentText("vbus")
         self.layout.addWidget(self.chart)
@@ -529,6 +539,14 @@ class PlotTab2(MotorTab):
             self.pp.setNumber(max(val2) - min(val2))
         except ValueError:
             pass
+
+    def unpause(self):
+        self.set_field_options()
+        return super().unpause()
+
+    def set_field_options(self):
+        self.field_names = sorted(current_motor().get_api_options())
+        self.combo_box.addItems(self.field_names)
 
 class VelocityTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -822,6 +840,9 @@ class MainWindow(QMainWindow):
             motors = motor_manager.get_motors_by_name(["sim1", "sim2"], connect=False, allow_simulated = True)
         else:
             motors = motor_manager.get_connected_motors(connect=False)
+        if len(motors) == 0:
+            motors = motor_manager.get_motors_by_name(["sim1", "sim3"], connect=False, allow_simulated = True)
+            self.simulated = True
         print(motors)
         self.menu_bar = QMenuBar(self)
         self.motor_menu = QMenu("&Motor")
@@ -842,10 +863,7 @@ class MainWindow(QMainWindow):
             self.motor_ip_menu.addAction(ip)
         self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
 
-        if len(motors):
-            self.connect_motor(motors[0].name())
-        else:
-            self.connect_motor_ip(ips[0])
+        self.connect_motor(motors[0].name())
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -1392,7 +1410,11 @@ class StepperTab(MotorTab):
         self.name = "stepper_velocity"
         self.current = 0.
         self.velocity = 0.
-        self.num_poles = float(current_motor()["num_poles"].get())
+        num_poles = current_motor()["num_poles"].get()
+        if (num_poles):
+            self.num_poles = float(num_poles)
+        else:
+            self.num_poles = 1
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
