@@ -410,10 +410,6 @@ class StatusTab(MotorTab):
                 val = current_motor()[status.combo_box.currentText()].get()
                 status.setText(val)
 
-    def unpause(self):
-        self.set_field_options()
-        return super().unpause()
-
 
     def set_field_options(self):
         self.field_names = sorted(current_motor().get_api_options())
@@ -540,12 +536,9 @@ class PlotTab2(MotorTab):
         except ValueError:
             pass
 
-    def unpause(self):
-        self.set_field_options()
-        return super().unpause()
-
     def set_field_options(self):
         self.field_names = sorted(current_motor().get_api_options())
+        self.combo_box.clear()
         self.combo_box.addItems(self.field_names)
 
 class VelocityTab(MotorTab):
@@ -841,7 +834,7 @@ class MainWindow(QMainWindow):
         else:
             motors = motor_manager.get_connected_motors(connect=False)
         if len(motors) == 0:
-            motors = motor_manager.get_motors_by_name(["sim1", "sim3"], connect=False, allow_simulated = True)
+            motors = motor_manager.get_motors_by_name(["sim1"], connect=False, allow_simulated = True)
             self.simulated = True
         print(motors)
         self.menu_bar = QMenuBar(self)
@@ -872,11 +865,12 @@ class MainWindow(QMainWindow):
         self.tuning_tab.setTabPosition(QTabWidget.TabPosition.West)
         self.tuning_tab.unpause = None
 
-
+        self.status_tab = StatusTab()
+        self.plot2_tab = PlotTab2()
         self.tabs.addTab(FaultTab(), "fault")
-        self.tabs.addTab(StatusTab(), "status")
+        self.tabs.addTab(self.status_tab, "status")
         self.tabs.addTab(PlotTab(), "plot")
-        self.tabs.addTab(PlotTab2(), "plot2")
+        self.tabs.addTab(self.plot2_tab, "plot2")
         self.tabs.addTab(VelocityTab(), "velocity")
         self.tabs.addTab(LogTab(), "log")
         #self.tabs.addTab(self.tuning_tab, "tuning")
@@ -900,21 +894,23 @@ class MainWindow(QMainWindow):
         global cpu_frequency
         print("Connecting motor " + ip)
         motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
-        motor_manager.set_auto_count()
-        current_motor()["api_timeout"] = "100000"
-        current_motor().set_timeout_ms(500)
-        self.setWindowTitle(ip + " sn:" + current_motor().serial_number())
-        cpu_frequency = current_motor().get_cpu_frequency()
+        self.connect_motor_generic(ip)
 
     def connect_motor(self, name):
          global cpu_frequency
          print("Connecting motor " + name)
          motor_manager.get_motors_by_name([name], allow_simulated = self.simulated)
-         motor_manager.set_auto_count()
-         current_motor()["api_timeout"] = "100000"
-         current_motor().set_timeout_ms(500)
-         self.setWindowTitle(name + " sn:" + current_motor().serial_number())
-         cpu_frequency = current_motor().get_cpu_frequency()
+         self.connect_motor_generic(name)
+
+    def connect_motor_generic(self, name):
+        motor_manager.set_auto_count()
+        current_motor()["api_timeout"] = "100000"
+        current_motor().set_timeout_ms(500)
+        self.setWindowTitle(name + " sn:" + current_motor().serial_number())
+        cpu_frequency = current_motor().get_cpu_frequency()
+        if hasattr(self, "status_tab"):
+            self.status_tab.set_field_options()
+            self.plot2_tab.set_field_options()
 
     def new_tab(self, index):
         #print("last tab " + str(index) + " " + self.last_tab.name)
