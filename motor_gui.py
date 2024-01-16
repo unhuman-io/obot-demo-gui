@@ -46,10 +46,10 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 motor_manager = None
 
 # Read the environment variables to get the path to project-x
-projectx_path = os.getenv('PROJECTX_PATH')  
-sys.path.append(projectx_path + "/tools/calibration")
-
-from motor_handler import MotorHandler
+project_path = os.getenv('PROJECT_PATH')  
+if project_path is not None:
+    sys.path.append(project_path + "/tools/calibration")
+    from motor_handler import MotorHandler
 
 def current_motor():
     return motor_manager.motors()[0]
@@ -776,9 +776,9 @@ class BringupTab(MotorTab):
     def save_to_folder(self):
         # Read the selected folder
         folder_dialog = QFileDialog(self)
-        folder_dialog.setDirectory(f"{projectx_path}/tools/obot")        
+        folder_dialog.setDirectory(f"{project_path}/tools/obot")        
         self.dest_folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
-        motor_driver_sn_file = f"{projectx_path}/tools/obot/motor_driver_parameters/{current_motor().serial_number()}.json"
+        motor_driver_sn_file = f"{project_path}/tools/obot/motor_driver_parameters/{current_motor().serial_number()}.json"
         if not os.path.exists(motor_driver_sn_file):
             print(f"Cannot find {motor_driver_sn_file}")
             return
@@ -800,7 +800,7 @@ class BringupTab(MotorTab):
     def select_config(self) -> None:
         # Open a file dialog to select files for upload
         file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(projectx_path + "/tools/obot/")  # Set the current directory
+        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
         self.base_config_path, _ = file_dialog.getOpenFileName(self, "Open File", "")
         print(f"Setting obot_config_path to: {self.base_config_path}")
         self.robot_label.setText(self.base_config_path)
@@ -808,14 +808,14 @@ class BringupTab(MotorTab):
     def select_tcell(self) -> None:
         # Open a file dialog to select files for upload
         file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(projectx_path + "/tools/obot/")  # Set the current directory
+        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
         self.tcell_config, _ = file_dialog.getOpenFileName(self, "Open File", "")
         print(f"Setting torque cell config to: {self.tcell_config}")
         self.tcell_label.setText(self.tcell_config)
 
     def save_to_package(self):
         package_file_dialog = QFileDialog(self)
-        package_file_dialog.setDirectory(f"{projectx_path}/tools/obot")
+        package_file_dialog.setDirectory(f"{project_path}/tools/obot")
         package_file_dialog.setFileMode(QFileDialog.ExistingFile)
         self.robot_package, _ = package_file_dialog.getOpenFileName(self, "Open File", "")
         self.update_motor_handler()
@@ -1052,7 +1052,7 @@ class CalibrateTab(MotorTab):
     def select_config(self) -> None:
         # Open a file dialog to select files for upload
         file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(projectx_path + "/tools/obot/")  # Set the current directory
+        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
         self.device_config_path, _ = file_dialog.getOpenFileName(self, "Select File", "")
         self.robot_config_path = os.path.dirname(self.device_config_path)
         # self.robot_config_path = str(QFileDialog.getOpenFileName(self, "Select Directory"))
