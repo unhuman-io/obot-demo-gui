@@ -4,6 +4,9 @@ import sys
 import traceback
 import os
 import glob
+import re
+import json
+import yaml
 
 from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
 from PyQt5.QtWidgets import (
@@ -36,13 +39,17 @@ from PyQt5.QtChart import QChart, QChartView, QLineSeries, QScatterSeries, QValu
 import motor
 import numpy as np
 from io import StringIO
-from motor_handler import MotorHandler
 import time
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 motor_manager = None
 
+# Read the environment variables to get the path to project-x
+projectx_path = os.getenv('PROJECTX_PATH')  
+sys.path.append(projectx_path + "/tools/calibration")
+
+from motor_handler import MotorHandler
 
 def current_motor():
     return motor_manager.motors()[0]
@@ -708,48 +715,59 @@ class BringupTab(MotorTab):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        project_layout = QHBoxLayout()
-        projects = []
-        self.projects_combo_box = QComboBox(self)
-        for root,d_names,f_names in os.walk(f"{os.path.expanduser('~')}"):
-            if "project-x" in d_names:
-                print (root, d_names, f_names)
-                projects.append(f"{root}/project-x")
-        self.projects_combo_box.addItems(projects)
-        self.projects_combo_box.currentIndexChanged.connect(self.set_projectx)
-        project_layout.addWidget(self.projects_combo_box)
+        select_config_layout = QHBoxLayout()
 
-        self.robot_combo_box = QComboBox(self)
-        self.robot_combo_box.currentIndexChanged.connect(self.set_robot_path)
-        project_layout.addWidget(self.robot_combo_box)
-        layout.addLayout(project_layout)
+        self.set_robot_button = QPushButton("Select Base Config")
+        self.set_robot_button.clicked.connect(self.select_config)
+        select_config_layout.addWidget(self.set_robot_button)
+        self.robot_label = QLineEdit(self)
+        select_config_layout.addWidget(self.robot_label)
+        layout.addLayout(select_config_layout)
+
+        select_tcell_layout = QHBoxLayout()
+        self.set_tcell = QPushButton("Select Torque Cell Config")
+        self.set_tcell.clicked.connect(self.select_tcell)
+        select_tcell_layout.addWidget(self.set_tcell)
+        self.tcell_label = QLineEdit(self)
+        select_tcell_layout.addWidget(self.tcell_label)
+        layout.addLayout(select_tcell_layout)
 
         select_params_layout = QHBoxLayout()
-        self.config_combo_box = QComboBox()
-        select_params_layout.addWidget(self.config_combo_box)
-
         self.fw_type_combo_box = QComboBox()
-        fw_types = ["motor_aksim", "motor_aksim_19_17", "motor_aksim_19_18", "motor_aksim_20_19", "motor_aksim_20_19_2z1p", "motor_aksim_2z1p"]
+        fw_types = ["a_sample_futek_without_enc", "a_sample_futek_with_enc", "a_sample_figure_without_enc", "a_sample_figure_with_enc", "a_sample_nmb_without_enc", "a_sample_nmb_with_enc", "a_sample_ankle_y", "hands", "b_test", "b_test_hd11-14", "b_test_ld"]
         self.fw_type_combo_box.addItems(fw_types)
         select_params_layout.addWidget(self.fw_type_combo_box)
 
         self.board_type_combo_box = QComboBox()
-        self.board_types_dict = {"MR0P - Green": "MR0P", "MR0 - Red": "MR0", "MR1 - Blue":"MR1", "MR2":"MR2"}
+        self.board_types_dict = {"MR0P - Green": "MR0P", "MR0 - Red": "MR0", "MR1 - Blue":"MR1", "MR1N":"MR1N", "MR2":"MR2"}
         self.board_type_combo_box.addItems(self.board_types_dict.keys())
         select_params_layout.addWidget(self.board_type_combo_box)
-        layout.addLayout(select_params_layout)
-
-        self.tcell_combo_box = QComboBox()
-        self.tcell_dict = {"Figure_gen1": "-DMAX11254_TORQUE_SENSOR", "Futek":"-DIGNORE_QIA128_CALIBRATION", "NMB":"-DADS8339_TORQUE_SENSOR", "NA":""}
-        self.tcell_combo_box.addItems(self.tcell_dict.keys())
-        select_params_layout.addWidget(self.tcell_combo_box)
-        layout.addLayout(select_params_layout)
 
         self.compile_opts_combo_box = QComboBox()
-        compile_opts = ["-DJOINT_ENCODER_BITS=18", "-DBROKEN_MAX31875",'']
+        compile_opts = ["-DBROKEN_MAX31875",'']
         self.compile_opts_combo_box.addItems(compile_opts)
         select_params_layout.addWidget(self.compile_opts_combo_box)
         layout.addLayout(select_params_layout)
+
+        create_file_layout = QHBoxLayout()
+        self.new_file_name = QLineEdit(placeholderText="Please enter the desired name of the new actuator .json")
+        create_file_layout.addWidget(self.new_file_name)
+        layout.addLayout(create_file_layout)
+
+        save_file_layout = QHBoxLayout()
+        self.select_folder = QPushButton("Save to folder")
+        self.select_folder.clicked.connect(self.save_to_folder)
+        save_file_layout.addWidget(self.select_folder)
+
+        layout.addLayout(save_file_layout)
+
+        package_layout = QHBoxLayout()
+
+        self.save_to_platform_btn = QPushButton("Save to Platform")
+        self.save_to_platform_btn.clicked.connect(self.save_to_package)
+        package_layout.addWidget(self.save_to_platform_btn)
+
+        layout.addLayout(package_layout)
 
         buttons_layout = QHBoxLayout()
         self.flash_param_btn = QPushButton("Flash params only")
@@ -769,59 +787,85 @@ class BringupTab(MotorTab):
 
         layout.addLayout(buttons_layout)
 
-        self.save_to_package_btn = QPushButton("Save to Package")
-        self.save_to_package_btn.clicked.connect(self.save_to_package)
-        layout.addWidget(self.save_to_package_btn)
-
         self.setLayout(layout)
-
-    def set_projectx(self):
-        self.project_x = self.projects_combo_box.currentText()
-        self.robot_combo_box.addItems(os.listdir(self.project_x + "/tools/obot"))
-
-    def set_robot_path(self):
-        self.robot_config_path = self.project_x + "/tools/obot/" + self.robot_combo_box.currentText()
-        self.config_combo_box.addItems(os.listdir(self.robot_config_path))
 
     def update(self):
         super(BringupTab, self).update()
 
+    def save_to_folder(self):
+        # Read the selected folder
+        folder_dialog = QFileDialog(self)
+        folder_dialog.setDirectory(f"{projectx_path}/tools/obot")        
+        self.dest_folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
+        motor_driver_sn_file = f"{projectx_path}/tools/obot/motor_driver_parameters/{current_motor().serial_number()}.json"
+        if not os.path.exists(motor_driver_sn_file):
+            print(f"Cannot find {motor_driver_sn_file}")
+            return
+        # Create the file with the name given by the user
+        dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.dest_folder)}",
+                        "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.dest_folder)}",
+                        "inherits2": f"{os.path.relpath(self.tcell_config, self.dest_folder)}"}
+        self.dest_file = self.dest_folder + "/" + self.new_file_name.text()
+        print(f"Creating a new configuration file at {self.dest_file}")
+        with open(self.dest_file, "w") as file:
+            json.dump(dictionary, file, indent=4)
+        try:
+            with open(self.dest_file, "w") as file:
+                json.dump(dictionary, file, indent=4)
+            QMessageBox.information(self, "Success", f"File saved to {self.dest_file}!")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+    def select_config(self) -> None:
+        # Open a file dialog to select files for upload
+        file_dialog = QFileDialog(self)
+        file_dialog.setDirectory(projectx_path + "/tools/obot/")  # Set the current directory
+        self.base_config_path, _ = file_dialog.getOpenFileName(self, "Open File", "")
+        print(f"Setting obot_config_path to: {self.base_config_path}")
+        self.robot_label.setText(self.base_config_path)
+
+    def select_tcell(self) -> None:
+        # Open a file dialog to select files for upload
+        file_dialog = QFileDialog(self)
+        file_dialog.setDirectory(projectx_path + "/tools/obot/")  # Set the current directory
+        self.tcell_config, _ = file_dialog.getOpenFileName(self, "Open File", "")
+        print(f"Setting torque cell config to: {self.tcell_config}")
+        self.tcell_label.setText(self.tcell_config)
+
     def save_to_package(self):
-        self.file_dialog = QFileDialog(self)
-        self.file_dialog.setDirectory(f"{self.project_x}/tools/obot")
-        self.file_dialog.setFileMode(QFileDialog.ExistingFile)
-        if self.file_dialog.exec_():
-            self.robot_package = self.file_dialog.selectedFiles()[0]
-            self.update_motor_handler()
-            if(self.package_info is not None):
-                # Update package_infor by running update_motor_handler
-                with open(self.robot_package, 'a+') as file:
-                    # Append a line to the file
-                    print(f"appending {self.package_info} to {self.robot_package}")
-                    try:
-                        file.write(f'\n  - [{self.package_info}]')
-                        QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
-                    except Exception as e:
-                        QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
-
-
-
+        package_file_dialog = QFileDialog(self)
+        package_file_dialog.setDirectory(f"{projectx_path}/tools/obot")
+        package_file_dialog.setFileMode(QFileDialog.ExistingFile)
+        self.robot_package, _ = package_file_dialog.getOpenFileName(self, "Open File", "")
+        self.update_motor_handler()
+        if(self.package_info is not None):
+            # Update package_infor by running update_motor_handler
+            with open(self.robot_package, 'a+') as file:
+                # Append a line to the file
+                print(f"Appending {self.package_info} to {self.robot_package}")
+                try:
+                    file.write(f'\n  - [{self.package_info}]')
+                    QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def update_motor_handler(self):
         self.fw_type = self.fw_type_combo_box.currentText()
         self.board_type = self.board_types_dict[self.board_type_combo_box.currentText()]
-        self.compile_opts = self.compile_opts_combo_box.currentText()
-        self.tcell_type = self.tcell_dict[self.tcell_combo_box.currentText()]
-        self.motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
+        match = re.search(r'([^/]+)\.json$', self.dest_file)
+        self.motor_name = match.group(1)
+        # self.motor_name = current_motor().name()
         self.serial_number = current_motor().serial_number()
-        self.package_info = f"\"{current_motor().serial_number()}\", \"{self.fw_type}\", \"{self.motor_name}\", \"\'{self.board_type} {self.compile_opts} {self.tcell_type}\'\""
-        print(self.package_info)
-        motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts} {self.tcell_type}\'", "sn":current_motor().serial_number()}}
+        self.compile_opts = self.compile_opts_combo_box.currentText()
+        self.package_info = f"\"{current_motor().serial_number()}\", \"{self.fw_type}\", \"{self.motor_name}\", \"\'{self.board_type}\'\""
+        motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts}\'", "sn":current_motor().serial_number()}}
         try:
-            self.motor_handler = MotorHandler( self.robot_config_path,
+            self.motor_handler = MotorHandler( self.dest_folder,
                                                 None,
                                                 motor_info,
-                                                self.motor_name)
+                                                self.motor_name,
+                                                no_firmware_log = True
+                                                )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
@@ -834,9 +878,9 @@ class BringupTab(MotorTab):
 
         try:
             self.motor_handler.run_flash_params_routine()
+            time.sleep(6)
             QMessageBox.information(self, "Success", "The operation was successful!")
             # Wait for the device to show up again
-            time.sleep(6)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
@@ -936,8 +980,6 @@ class CalibrateTab(MotorTab):
         self.update_list.append(self.idir)
         layout.addLayout(boollayout)
         
-        
-
         self.obias = APIEdit("obias", "output bias (rad)", "main_loop_param.output_encoder.bias")
         self.obias.signal.connect(self.obias_set)
         self.oposition = NumberDisplay("output position (rad)", tooltip="status.joint_position")
@@ -992,28 +1034,15 @@ class CalibrateTab(MotorTab):
 
         project_layout = QHBoxLayout()
         projects = []
-        self.projects_combo_box = QComboBox(self)
-        for root,d_names,f_names in os.walk(f"{os.path.expanduser('~')}"):
-            if "project-x" in d_names:
-                print (root, d_names, f_names)
-                projects.append(f"{root}/project-x")
-        self.projects_combo_box.addItems(projects)
-        self.projects_combo_box.currentIndexChanged.connect(self.set_projectx)
-        project_layout.addWidget(self.projects_combo_box)
-
-        self.robot_combo_box = QComboBox(self)
-        self.robot_combo_box.currentIndexChanged.connect(self.update_config_file_combo_box)
-        project_layout.addWidget(self.robot_combo_box)
-        layout.addLayout(project_layout)
-
-        self.config_combo_box = QComboBox()
-        self.last_motor = None
-        self.current_motor_config_files = []
-        # self.update_config_file_combo_box()
-        project_layout.addWidget(self.config_combo_box)
-        layout.addLayout(project_layout)
 
         save_to_flash_layout = QHBoxLayout()
+        self.set_robot_button = QPushButton("Select yaml package for the actuator")
+        self.set_robot_button.clicked.connect(self.select_config)
+        save_to_flash_layout.addWidget(self.set_robot_button)
+        self.robot_label = QLineEdit(self)
+        save_to_flash_layout.addWidget(self.robot_label)
+        layout.addLayout(save_to_flash_layout)
+
         self.button = QPushButton("Save runtime values to flash")
         self.button.setToolTip("Save to flash")
         self.button.clicked.connect(self.run_read_runtime_and_save_to_flash_routine)
@@ -1022,22 +1051,39 @@ class CalibrateTab(MotorTab):
 
         self.setLayout(layout)
 
+    def read_yaml(self, filename: str) -> dict[str, dict[str, str]]:
+        package_dict: dict[str, dict[str, str]] = {}
+        with open(os.path.expanduser(filename), "r") as file:
+            d = yaml.safe_load(file)
+            for line in d["config"]:
+                if line[0] == current_motor().serial_number():
+                    package_info = {}
+                # for example:
+                # config:
+                #  - ["207539635356", "motor_aksim", "J1", "R4"]
+                sn = line[0]
+                fw_type = line[1]
+                name = line[2]
+                pcb_type = line[3]
+                package_dict[name] = {"sn": sn, "fw_type": fw_type, "pcb_type": pcb_type}
+        return package_dict
+
+    def select_config(self) -> None:
+        # Open a file dialog to select files for upload
+        file_dialog = QFileDialog(self)
+        file_dialog.setDirectory(projectx_path + "/tools/obot/")  # Set the current directory
+        self.device_config_path, _ = file_dialog.getOpenFileName(self, "Select File", "")
+        self.robot_config_path = os.path.dirname(self.device_config_path)
+        # self.robot_config_path = str(QFileDialog.getOpenFileName(self, "Select Directory"))
+        print(f"Setting obot_config_path to: {self.robot_config_path}")
+        self.robot_label.setText(self.robot_config_path)
+        print(self.robot_config_path.split('/')[-1].split('.')[0])
+
     def update(self):
         super(CalibrateTab, self).update()
         self.oposition.setNumber(self.status.joint_position)
         self.mposition.setNumber(self.status.motor_position)
         self.torque.setNumber(self.status.torque)
-
-    def set_projectx(self):
-        self.project_x = self.projects_combo_box.currentText()
-        self.robot_combo_box.addItems(os.listdir(self.project_x + "/tools/obot"))
-
-    def update_config_file_combo_box(self):
-        self.robot_config_path = self.project_x + "/tools/obot/" + self.robot_combo_box.currentText()
-        print(f"Setting tobot_config_path to: {self.robot_config_path}")
-        print(self.robot_config_path)
-        self.config_combo_box.clear()
-        self.config_combo_box.addItems(os.listdir(self.robot_config_path))
 
     def phase_lock(self):
         print("phase lock")
@@ -1067,17 +1113,33 @@ class CalibrateTab(MotorTab):
 
     def run_read_runtime_and_save_to_flash_routine(self):
         print("Reading runtime values and saving to flash")
-        motor_name = os.path.splitext(self.config_combo_box.currentText())[0]
-        motor_info = {motor_name :{"fw_type": None, "pcb_type": None, "sn":current_motor().serial_number()}}
+        motor_name = current_motor().name() #motors[0].name()
+        print(f"Motor name {motor_name}")
+        motor_info = {}
+        self.updating_enabled = False
+        with open(os.path.expanduser(self.device_config_path), "r") as file:
+            data = yaml.safe_load(file)
+            for line in data["config"]:
+                if line[0] == current_motor().serial_number():
+                    motor_info = {motor_name :{"fw_type": line[1], "pcb_type": line[3], "sn":current_motor().serial_number()}}
+                break
+
+        # motor_info = {motor_name :{"fw_type": None, "pcb_type": None, "sn":current_motor().serial_number()}}
+        print(motor_info)
+        print(self.robot_config_path)
         self.motor_handler = MotorHandler( self.robot_config_path,
                                             None,
                                             motor_info,
-                                            motor_name)
+                                            motor_name,
+                                            no_firmware_log=True)
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
-        self.updating_enabled = False
-        self.motor_handler.run_read_runtime_and_save_to_flash_routine()
-        # Wait for the device to show up again
-        time.sleep(6)
+        try:
+            self.motor_handler.run_read_runtime_and_save_to_flash_routine()
+            time.sleep(6)
+            QMessageBox.information(self, "Success", "The operation was successful!")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
         # Reenable updates
         self.updating_enabled = True
 
