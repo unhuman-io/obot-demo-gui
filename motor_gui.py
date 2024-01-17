@@ -8,6 +8,11 @@ import re
 import json
 import yaml
 
+# for other included files, so pyinstaller will build with it
+import boto3
+import git
+import gspread
+
 from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
 from PyQt5.QtWidgets import (
     QApplication,

@@ -1,3 +1,9 @@
 pyqt5
 pyqtchart
 numpy
+pyyaml
+# external dependancies
+psutil
+boto3
+git
+gspread
