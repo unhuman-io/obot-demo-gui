@@ -8,6 +8,14 @@ import re
 import json
 import yaml
 
+# for other included files, so pyinstaller will build with it
+import boto3
+import git
+import gspread
+import oauth2client
+import oauth2client.service_account
+import paramiko
+
 from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
 from PyQt5.QtWidgets import (
     QApplication,
