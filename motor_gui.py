@@ -798,26 +798,18 @@ class BringupTab(MotorTab):
         # create_file_layout.addWidget(self.new_file_name)
         # layout.addLayout(create_file_layout)
 
-        create_and_save_layout = QHBoxLayout()
+        # create_and_save_layout = QHBoxLayout()
+        buttons_layout = QHBoxLayout()
         self.create_and_save_btn = QPushButton("Create File and Save To Package")
         self.create_and_save_btn.clicked.connect(self.create_file_update_yaml)
-        create_and_save_layout.addWidget(self.create_and_save_btn)
+        buttons_layout.addWidget(self.create_and_save_btn)
 
-        layout.addLayout(create_and_save_layout)
-
-        buttons_layout = QHBoxLayout()
-        self.flash_param_btn = QPushButton("Flash params only")
-        self.flash_param_btn.setToolTip("Flash params")
-        self.flash_param_btn.clicked.connect(self.run_flash_params_routine)
-        buttons_layout.addWidget(self.flash_param_btn)
-
-        self.flash_fw_btn = QPushButton("Flash firmware only")
-        self.flash_fw_btn.setToolTip("Flash firmware")
-        self.flash_fw_btn.clicked.connect(self.run_flash_firmware_routine)
-        buttons_layout.addWidget(self.flash_fw_btn)
+        # layout.addLayout(create_and_save_layout)
 
         self.flash_all_btn = QPushButton("Flash all")
-        self.flash_all_btn.setToolTip("Flash firmware")
+        self.flash_all_btn.setToolTip("Flash all")
+        self.flash_all_btn.setDisabled(True)
+
         self.flash_all_btn.clicked.connect(self.run_flash_all_routine)
         buttons_layout.addWidget(self.flash_all_btn)
 
@@ -912,15 +904,28 @@ class BringupTab(MotorTab):
         # Add a reference to this file to the yaml package
         self.update_motor_handler()
         if(self.package_info is not None):
-            # Update package_infor by running update_motor_handler
-            with open(self.robot_package, 'a+') as file:
-                # Append a line to the file
-                print(f"Appending {self.package_info} to {self.robot_package}")
-                try:
-                    file.write(f'\n  - [{self.package_info}]')
-                    QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
-                except Exception as e:
-                    QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            try:
+                self.update_yaml_file()
+                QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+        self.flash_all_btn.setDisabled(False)
+
+    def update_yaml_file(self):
+        new_lines = []
+        serial_number_to_match = current_motor().serial_number()
+
+        with open(self.robot_package, 'r') as file:
+            for line in file:
+                if f"{serial_number_to_match}" in line:
+                    new_lines.append(f'  - [{self.package_info}]\n')  # Replace line with package_info
+                else:
+                    new_lines.append(line)
+
+        with open(self.robot_package, 'w') as file:
+            file.writelines(new_lines)
+
 
     def create_file_and_save(self):
         motor_driver_sn_file = f"{project_path}/tools/obot/motor_driver_parameters/{current_motor().serial_number()}.json"
