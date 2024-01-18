@@ -915,13 +915,19 @@ class BringupTab(MotorTab):
     def update_yaml_file(self):
         new_lines = []
         serial_number_to_match = current_motor().serial_number()
-
+        line_added = False
         with open(self.robot_package, 'r') as file:
             for line in file:
                 if f"{serial_number_to_match}" in line:
-                    new_lines.append(f'  - [{self.package_info}]\n')  # Replace line with package_info
+                    # If a line with this SN exists replace the line with the new setup for that SN
+                    new_lines.append(f'  - [{self.package_info}]\n')
+                    line_added = True
                 else:
                     new_lines.append(line)
+        if not line_added:
+            # if the SN didn't exist in the file already then add the line to the bottom of the file
+            new_lines.append(f'  - [{self.package_info}]\n')  # Replace line with package_info
+
 
         with open(self.robot_package, 'w') as file:
             file.writelines(new_lines)
