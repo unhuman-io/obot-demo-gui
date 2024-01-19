@@ -323,7 +323,7 @@ class MotorTab(QWidget):
         global motor_manager
         #print("update: " + self.name)
         num_retries = 0
-        while num_retries < 5:
+        while num_retries < 10:
             try:
                 self.status = motor_manager.read()[0]
                 for item in self.update_list:
@@ -332,7 +332,7 @@ class MotorTab(QWidget):
             except RuntimeError:
                 window.refresh()
                 num_retries +=1
-        if num_retries == 5:
+        if num_retries == 10:
             raise RuntimeError("Failed to reconnect")
 
 
@@ -1217,7 +1217,6 @@ class CalibrateTab(MotorTab):
         pass
 
     def run_read_runtime_and_save_to_flash_routine(self):
-        print("Reading runtime values and saving to flash")
         motor_name = current_motor().name() #motors[0].name()
         motor_info = {}
         with open(os.path.expanduser(self.device_config_path), "r") as file:
@@ -1225,19 +1224,18 @@ class CalibrateTab(MotorTab):
             for line in data["config"]:
                 if line[0] == current_motor().serial_number():
                     motor_info = {motor_name :{"fw_type": line[1], "pcb_type": line[3], "sn":current_motor().serial_number()}}
-                break
+                    break
 
         self.motor_handler = MotorHandler( self.robot_config_path,
                                             None,
                                             motor_info,
                                             motor_name,
                                             no_firmware_log=True)
-
         self.updating_enabled = False
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         try:
             self.motor_handler.run_read_runtime_and_save_to_flash_routine()
-            time.sleep(2)
+            time.sleep(5)
             QMessageBox.information(self, "Success", "The operation was successful!")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
