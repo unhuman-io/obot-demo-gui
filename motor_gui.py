@@ -7,6 +7,7 @@ import glob
 import re
 import json
 import yaml
+import subprocess
 
 # for other included files, so pyinstaller will build with it
 import boto3
@@ -785,18 +786,21 @@ class BringupTab(MotorTab):
         layout.addLayout(select_params_layout)
 
         buttons_layout = QHBoxLayout()
-        self.create_and_save_btn = QPushButton("Create File and Save To Package")
+        self.create_and_save_btn = QPushButton("Create File and Save To Yaml Package")
         self.create_and_save_btn.clicked.connect(self.create_file_update_yaml)
         buttons_layout.addWidget(self.create_and_save_btn)
-
-        # layout.addLayout(create_and_save_layout)
 
         self.flash_all_btn = QPushButton("Flash all")
         self.flash_all_btn.setToolTip("Flash all")
         self.flash_all_btn.setDisabled(True)
 
+        self.commit_and_push_btn = QPushButton("Commit and push")
+        self.commit_and_push_btn.clicked.connect(self.commit_and_push)
+        self.commit_and_push_btn.setDisabled(True)
+
         self.flash_all_btn.clicked.connect(self.run_flash_all_routine)
         buttons_layout.addWidget(self.flash_all_btn)
+        buttons_layout.addWidget(self.commit_and_push_btn)
 
         layout.addLayout(buttons_layout)
 
@@ -854,6 +858,74 @@ class BringupTab(MotorTab):
 
     def update(self):
         super(BringupTab, self).update()
+
+
+    def checkout_main(self):
+        try:
+            subprocess.run(['git', 'checkout', 'main'], cwd=project_path, check=True)
+        except subprocess.CalledProcessError as e:
+            print("TRYING TO STASH")
+            # QMessageBox.critical(self, "Error", f"Failed to checkout main branch trying to stash: {e}")
+            try:
+                subprocess.run(['git', 'stash'], cwd=project_path, check=True)
+                stashed = True
+                print("STASHED")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to stash contents and checkout main branch: {e}")
+                raise RuntimeError(e)
+                # return
+            try:
+                subprocess.run(['git', 'checkout', 'main'], cwd=project_path, check=True)
+                print("CHECKOUT MAIN AGAIN")
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(e)
+                # QMessageBox.critical(self, "Error", f"Failed to checkout main branch trying to stash: {e}")
+        return
+
+    def commit_and_push(self):
+        stashed=False
+        platform_type = self.platform_type_dropdown.currentText()
+        joint_name = self.joint_name_dropdown.currentText()
+        # Checkout the main branch in the project_path repo
+        try:
+            self.checkout_main()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to checkout main branch: {e}")
+            return           
+
+        # Create a branch based on platform_name and joint_name
+        branch_name = f'user/motor_gui_auto/{platform_type}/{joint_name}'
+        try:
+            subprocess.run(['git', 'checkout', '-B', branch_name], cwd=project_path, check=True)
+            print(f"Check out branch {branch_name}")
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to create branch: {e}")
+            return
+
+        # Commit self.dest_file and self.robot_package
+        try:
+            print(f"Add {self.dest_file} and {self.robot_package} to the commit")
+            subprocess.run(['git', 'add', self.dest_file, self.robot_package], cwd=project_path, check=True)
+            print(f"Commit files")
+            subprocess.run(['git', 'commit', '-m', 'Commit message'], cwd=project_path, check=True)
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to commit files: {e}")
+            return
+
+        # Push the branch
+        try:
+            subprocess.run(['git', 'push', 'origin', branch_name], cwd=project_path, check=True)
+            print("Push branch")
+            QMessageBox.information(self, "Success", "Branch created, committed, and pushed successfully!")
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to push branch: {e}")
+
+        if stashed:
+            try:
+                subprocess.run(['git', 'stash', 'apply'], cwd=project_path, check=True)
+            except subprocess.CalledProcessError as e:
+                QMessageBox.critical(self, "Error", f"Failed to apply stashed changes: {e}")
+                return
 
     def select_tcell(self) -> None:
         # Open a file dialog to select files for upload
@@ -917,7 +989,6 @@ class BringupTab(MotorTab):
 
         with open(self.robot_package, 'w') as file:
             file.writelines(new_lines)
-
 
     def create_file_and_save(self):
         platform_type = self.platform_type_dropdown.currentText()
@@ -992,9 +1063,9 @@ class BringupTab(MotorTab):
         self.updating_enabled = False
         try:
             self.motor_handler.run_flash_firmware_routine()
+            time.sleep(6)  
             QMessageBox.information(self, "Success", "The operation was successful!")
             # Wait for the device to show up again
-            time.sleep(6)  
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
         # Reenable updates
@@ -1008,12 +1079,14 @@ class BringupTab(MotorTab):
         self.updating_enabled = False
         try:
             self.motor_handler.run_flash_all_routine()
-            # Wait for the device to show up again
             time.sleep(6)
+            QMessageBox.information(self, "Success", "The operation was successful!")
+            # Wait for the device to show up again
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
         # Reenable updates
         self.updating_enabled = True
+        self.commit_and_push_btn.setDisabled(False)
 
 
 class CalibrateTab(MotorTab):
