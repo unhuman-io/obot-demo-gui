@@ -747,18 +747,18 @@ class BringupTab(MotorTab):
         self.joint_name_dropdown.addItems(self.all_a_joints)
         self.torque_cell_type_dropdown.addItems(self.all_tcell_types)
 
-        self.update_firmware()
 
-        platform_directory_map = { "a_sample": "actuator_parameters_idir",
-                                    "b_test": "b_sample",
-                                    "hands": "palm"}
+        self.platform_directory_map = { "a_sample": "a_sample/actuator_parameters_idir",
+                                        "b_test": "b_sample_test/actuator_parameters",
+                                        "hands": "a_sample/palm"}
+
+        self.update_firmware()
         # Open a file dialog to select files for upload
         platform_type = self.platform_type_dropdown.currentText()
         joint_name = self.joint_name_dropdown.currentText()
-        directory = platform_directory_map[platform_type]
 
-        # TODO: when we can figure out the correct path based on the joint name use this code
-        # self.base_config_path = f"{project_path}/tools/obot/{directory}/{joint_name}.json"
+        #TODO: when we can figure out the correct path based on the joint name use this code
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
 
         # Connect signals
         self.platform_type_dropdown.currentIndexChanged.connect(self.update_joint_and_tcell_dropdowns)
@@ -769,14 +769,6 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.torque_cell_type_dropdown)
         layout.addLayout(select_params_layout)
         layout.addWidget(self.result_label)
-
-        select_config_layout = QHBoxLayout()
-        self.select_base_btn = QPushButton("Select Base Config")
-        self.select_base_btn.clicked.connect(self.select_config)
-        self.base_label = QLabel('Base Config: ', self)
-        select_config_layout.addWidget(self.select_base_btn)
-        select_config_layout.addWidget(self.base_label)
-        layout.addLayout(select_config_layout)
 
         select_tcell_layout = QHBoxLayout()
         self.set_tcell_btn = QPushButton("Select Torque Cell Config")
@@ -792,13 +784,6 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.compile_opts_combo_box)
         layout.addLayout(select_params_layout)
 
-        # TODO: save in case we want to add an actuator file named differently than the joint name
-        # create_file_layout = QHBoxLayout()
-        # self.new_file_name = QLineEdit(placeholderText="Please enter the desired name of the new actuator .json")
-        # create_file_layout.addWidget(self.new_file_name)
-        # layout.addLayout(create_file_layout)
-
-        # create_and_save_layout = QHBoxLayout()
         buttons_layout = QHBoxLayout()
         self.create_and_save_btn = QPushButton("Create File and Save To Package")
         self.create_and_save_btn.clicked.connect(self.create_file_update_yaml)
@@ -821,8 +806,10 @@ class BringupTab(MotorTab):
         # Clear the current items in the dropdown
         self.joint_name_dropdown.clear()
 
-        # Get the selected platform type
+        # Read the selected fields
         platform_type = self.platform_type_dropdown.currentText()
+        joint_name = self.joint_name_dropdown.currentText()
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
 
         # Update the joint name dropdown based on the platform type
         if platform_type == 'a_sample':
@@ -843,6 +830,8 @@ class BringupTab(MotorTab):
         platform_type = self.platform_type_dropdown.currentText()
         joint_name = self.joint_name_dropdown.currentText()
         selected_tcell_type = self.torque_cell_type_dropdown.currentText()
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
+
 
         if platform_type == "a_sample":
             if "spine" in joint_name:
@@ -866,22 +855,20 @@ class BringupTab(MotorTab):
     def update(self):
         super(BringupTab, self).update()
 
-    def select_config(self) -> None:
-        # Open a file dialog to select files for upload
-        file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
-        self.base_config_path, _ = file_dialog.getOpenFileName(self, "Open File", "")
-        print(f"Setting obot_config_path to: {self.base_config_path}")
-        self.base_label.setText(self.base_config_path)
-
     def select_tcell(self) -> None:
         # Open a file dialog to select files for upload
         tcell_directory_map = { "figure": "figure_gen1_torque_cell_parameters",
                                 "nmb": "nmb_a_torque_cell_parameters",
                                 "futek": "futek"}
         selected_tcell_type = self.torque_cell_type_dropdown.currentText()
+        selected_platform = self.torque_cell_type_dropdown.currentText()
+
+        platform_type = self.platform_type_dropdown.currentText()
+
         tcell_directory_name = tcell_directory_map[selected_tcell_type]
-        tcell_directory_path = f"{project_path}/tools/obot/{tcell_directory_name}"
+        # When there's a torque cell directory in B Sample uncomment this line and delete the one below
+        # tcell_directory_path = f"{project_path}/tools/obot/{platform_type}/{tcell_directory_name}"
+        tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
 
         file_dialog = QFileDialog(self)
         file_dialog.setDirectory(tcell_directory_path)  # Set the current directory
@@ -928,13 +915,19 @@ class BringupTab(MotorTab):
             # if the SN didn't exist in the file already then add the line to the bottom of the file
             new_lines.append(f'  - [{self.package_info}]\n')  # Replace line with package_info
 
-
         with open(self.robot_package, 'w') as file:
             file.writelines(new_lines)
 
 
     def create_file_and_save(self):
-        motor_driver_sn_file = f"{project_path}/tools/obot/motor_driver_parameters/{current_motor().serial_number()}.json"
+        platform_type = self.platform_type_dropdown.currentText()
+        joint_name = self.joint_name_dropdown.currentText()
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
+        print(f"{self.base_config_path}")
+        # TODO uncomment this line when we have `motor_driver_parameters` in the b_sample folder and remove the line below
+        # motor_driver_sn_file = f"{project_path}/tools/obot/{platform_type}/motor_driver_parameters/{current_motor().serial_number()}.json"
+        motor_driver_sn_file = f"{project_path}/tools/obot/a_sample/motor_driver_parameters/{current_motor().serial_number()}.json"
+
         if not os.path.exists(motor_driver_sn_file):
             print(f"Cannot find {motor_driver_sn_file}")
             return
@@ -942,7 +935,6 @@ class BringupTab(MotorTab):
         dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
                         "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
-        joint_name = self.joint_name_dropdown.currentText()
         self.dest_file = self.robot_directory + "/" + f"{joint_name}" + ".json"
         print(f"Creating a new configuration file at {self.dest_file}")
         with open(self.dest_file, "w") as file:
@@ -955,8 +947,6 @@ class BringupTab(MotorTab):
             QMessageBox.critical(self, "Error", f"An error occurred while creating the file: {str(e)}")
 
     def update_motor_handler(self):
-        # self.fw_type = self.fw_type_combo_box.currentText()
-        # self.board_type = self.board_types_dict[self.board_type_combo_box.currentText()]
         self.board_type = "RNONE"
         match = re.search(r'([^/]+)\.json$', self.dest_file)
         self.motor_name = match.group(1)
