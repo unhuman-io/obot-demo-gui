@@ -836,7 +836,6 @@ class BringupTab(MotorTab):
         selected_tcell_type = self.torque_cell_type_dropdown.currentText()
         self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
 
-
         if platform_type == "a_sample":
             if "spine" in joint_name:
                 self.fw_type = f"{platform_type}_{selected_tcell_type}_with_enc"
@@ -864,22 +863,16 @@ class BringupTab(MotorTab):
         try:
             subprocess.run(['git', 'checkout', 'main'], cwd=project_path, check=True)
         except subprocess.CalledProcessError as e:
-            print("TRYING TO STASH")
-            # QMessageBox.critical(self, "Error", f"Failed to checkout main branch trying to stash: {e}")
             try:
                 subprocess.run(['git', 'stash'], cwd=project_path, check=True)
                 stashed = True
-                print("STASHED")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to stash contents and checkout main branch: {e}")
                 raise RuntimeError(e)
-                # return
             try:
                 subprocess.run(['git', 'checkout', 'main'], cwd=project_path, check=True)
-                print("CHECKOUT MAIN AGAIN")
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(e)
-                # QMessageBox.critical(self, "Error", f"Failed to checkout main branch trying to stash: {e}")
         return
 
     def commit_and_push(self):
@@ -938,9 +931,10 @@ class BringupTab(MotorTab):
         platform_type = self.platform_type_dropdown.currentText()
 
         tcell_directory_name = tcell_directory_map[selected_tcell_type]
-        # When there's a torque cell directory in B Sample uncomment this line and delete the one below
-        # tcell_directory_path = f"{project_path}/tools/obot/{platform_type}/{tcell_directory_name}"
-        tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
+        if platform_type == "b_test":
+            tcell_directory_path = f"{project_path}/tools/obot/b_sample_test/b_torque_cell_calibration"
+        else:
+            tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
 
         file_dialog = QFileDialog(self)
         file_dialog.setDirectory(tcell_directory_path)  # Set the current directory
