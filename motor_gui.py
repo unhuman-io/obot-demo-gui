@@ -7,6 +7,12 @@ import glob
 import re
 import json
 import yaml
+import subprocess
+
+# for other included files, so pyinstaller will build with it
+import boto3
+import git
+import gspread
 
 # for other included files, so pyinstaller will build with it
 import boto3
@@ -326,7 +332,7 @@ class MotorTab(QWidget):
         global motor_manager
         #print("update: " + self.name)
         num_retries = 0
-        while num_retries < 5:
+        while num_retries < 10:
             try:
                 self.status = motor_manager.read()[0]
                 for item in self.update_list:
@@ -335,7 +341,7 @@ class MotorTab(QWidget):
             except RuntimeError:
                 window.refresh()
                 num_retries +=1
-        if num_retries == 5:
+        if num_retries == 10:
             raise RuntimeError("Failed to reconnect")
 
 
@@ -750,18 +756,18 @@ class BringupTab(MotorTab):
         self.joint_name_dropdown.addItems(self.all_a_joints)
         self.torque_cell_type_dropdown.addItems(self.all_tcell_types)
 
-        self.update_firmware()
 
-        platform_directory_map = { "a_sample": "actuator_parameters_idir",
-                                    "b_test": "b_sample",
-                                    "hands": "palm"}
+        self.platform_directory_map = { "a_sample": "a_sample/actuator_parameters_idir",
+                                        "b_test": "b_sample_test/actuator_parameters",
+                                        "hands": "a_sample/palm"}
+
+        self.update_firmware()
         # Open a file dialog to select files for upload
         platform_type = self.platform_type_dropdown.currentText()
         joint_name = self.joint_name_dropdown.currentText()
-        directory = platform_directory_map[platform_type]
 
-        # TODO: when we can figure out the correct path based on the joint name use this code
-        # self.base_config_path = f"{project_path}/tools/obot/{directory}/{joint_name}.json"
+        #TODO: when we can figure out the correct path based on the joint name use this code
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
 
         # Connect signals
         self.platform_type_dropdown.currentIndexChanged.connect(self.update_joint_and_tcell_dropdowns)
@@ -772,14 +778,6 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.torque_cell_type_dropdown)
         layout.addLayout(select_params_layout)
         layout.addWidget(self.result_label)
-
-        select_config_layout = QHBoxLayout()
-        self.select_base_btn = QPushButton("Select Base Config")
-        self.select_base_btn.clicked.connect(self.select_config)
-        self.base_label = QLabel('Base Config: ', self)
-        select_config_layout.addWidget(self.select_base_btn)
-        select_config_layout.addWidget(self.base_label)
-        layout.addLayout(select_config_layout)
 
         select_tcell_layout = QHBoxLayout()
         self.set_tcell_btn = QPushButton("Select Torque Cell Config")
@@ -795,34 +793,22 @@ class BringupTab(MotorTab):
         select_params_layout.addWidget(self.compile_opts_combo_box)
         layout.addLayout(select_params_layout)
 
-        # TODO: save in case we want to add an actuator file named differently than the joint name
-        # create_file_layout = QHBoxLayout()
-        # self.new_file_name = QLineEdit(placeholderText="Please enter the desired name of the new actuator .json")
-        # create_file_layout.addWidget(self.new_file_name)
-        # layout.addLayout(create_file_layout)
-
-        create_and_save_layout = QHBoxLayout()
-        self.create_and_save_btn = QPushButton("Create File and Save To Package")
-        self.create_and_save_btn.clicked.connect(self.create_file_update_yaml)
-        create_and_save_layout.addWidget(self.create_and_save_btn)
-
-        layout.addLayout(create_and_save_layout)
-
         buttons_layout = QHBoxLayout()
-        self.flash_param_btn = QPushButton("Flash params only")
-        self.flash_param_btn.setToolTip("Flash params")
-        self.flash_param_btn.clicked.connect(self.run_flash_params_routine)
-        buttons_layout.addWidget(self.flash_param_btn)
-
-        self.flash_fw_btn = QPushButton("Flash firmware only")
-        self.flash_fw_btn.setToolTip("Flash firmware")
-        self.flash_fw_btn.clicked.connect(self.run_flash_firmware_routine)
-        buttons_layout.addWidget(self.flash_fw_btn)
+        self.create_and_save_btn = QPushButton("Create File and Save To Yaml Package")
+        self.create_and_save_btn.clicked.connect(self.create_file_update_yaml)
+        buttons_layout.addWidget(self.create_and_save_btn)
 
         self.flash_all_btn = QPushButton("Flash all")
-        self.flash_all_btn.setToolTip("Flash firmware")
+        self.flash_all_btn.setToolTip("Flash all")
+        self.flash_all_btn.setDisabled(True)
+
+        self.commit_and_push_btn = QPushButton("Commit and push")
+        self.commit_and_push_btn.clicked.connect(self.commit_and_push)
+        self.commit_and_push_btn.setDisabled(True)
+
         self.flash_all_btn.clicked.connect(self.run_flash_all_routine)
         buttons_layout.addWidget(self.flash_all_btn)
+        buttons_layout.addWidget(self.commit_and_push_btn)
 
         layout.addLayout(buttons_layout)
 
@@ -832,8 +818,10 @@ class BringupTab(MotorTab):
         # Clear the current items in the dropdown
         self.joint_name_dropdown.clear()
 
-        # Get the selected platform type
+        # Read the selected fields
         platform_type = self.platform_type_dropdown.currentText()
+        joint_name = self.joint_name_dropdown.currentText()
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
 
         # Update the joint name dropdown based on the platform type
         if platform_type == 'a_sample':
@@ -854,6 +842,7 @@ class BringupTab(MotorTab):
         platform_type = self.platform_type_dropdown.currentText()
         joint_name = self.joint_name_dropdown.currentText()
         selected_tcell_type = self.torque_cell_type_dropdown.currentText()
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
 
         if platform_type == "a_sample":
             if "spine" in joint_name:
@@ -877,13 +866,67 @@ class BringupTab(MotorTab):
     def update(self):
         super(BringupTab, self).update()
 
-    def select_config(self) -> None:
-        # Open a file dialog to select files for upload
-        file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
-        self.base_config_path, _ = file_dialog.getOpenFileName(self, "Open File", "")
-        print(f"Setting obot_config_path to: {self.base_config_path}")
-        self.base_label.setText(self.base_config_path)
+
+    def checkout_main(self):
+        try:
+            subprocess.run(['git', 'checkout', 'main'], cwd=project_path, check=True)
+        except subprocess.CalledProcessError as e:
+            try:
+                subprocess.run(['git', 'stash'], cwd=project_path, check=True)
+                stashed = True
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to stash contents and checkout main branch: {e}")
+                raise RuntimeError(e)
+            try:
+                subprocess.run(['git', 'checkout', 'main'], cwd=project_path, check=True)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(e)
+        return
+
+    def commit_and_push(self):
+        stashed=False
+        platform_type = self.platform_type_dropdown.currentText()
+        joint_name = self.joint_name_dropdown.currentText()
+        # Checkout the main branch in the project_path repo
+        try:
+            self.checkout_main()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to checkout main branch: {e}")
+            return           
+
+        # Create a branch based on platform_name and joint_name
+        branch_name = f'user/motor_gui_auto/{platform_type}/{joint_name}'
+        try:
+            subprocess.run(['git', 'checkout', '-B', branch_name], cwd=project_path, check=True)
+            print(f"Check out branch {branch_name}")
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to create branch: {e}")
+            return
+
+        # Commit self.dest_file and self.robot_package
+        try:
+            print(f"Add {self.dest_file} and {self.robot_package} to the commit")
+            subprocess.run(['git', 'add', self.dest_file, self.robot_package], cwd=project_path, check=True)
+            print(f"Commit files")
+            subprocess.run(['git', 'commit', '-m', 'Commit message'], cwd=project_path, check=True)
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to commit files: {e}")
+            return
+
+        # Push the branch
+        try:
+            subprocess.run(['git', 'push', 'origin', branch_name], cwd=project_path, check=True)
+            print("Push branch")
+            QMessageBox.information(self, "Success", "Branch created, committed, and pushed successfully!")
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to push branch: {e}")
+
+        if stashed:
+            try:
+                subprocess.run(['git', 'stash', 'apply'], cwd=project_path, check=True)
+            except subprocess.CalledProcessError as e:
+                QMessageBox.critical(self, "Error", f"Failed to apply stashed changes: {e}")
+                return
 
     def select_tcell(self) -> None:
         # Open a file dialog to select files for upload
@@ -891,8 +934,15 @@ class BringupTab(MotorTab):
                                 "nmb": "nmb_a_torque_cell_parameters",
                                 "futek": "futek"}
         selected_tcell_type = self.torque_cell_type_dropdown.currentText()
+        selected_platform = self.torque_cell_type_dropdown.currentText()
+
+        platform_type = self.platform_type_dropdown.currentText()
+
         tcell_directory_name = tcell_directory_map[selected_tcell_type]
-        tcell_directory_path = f"{project_path}/tools/obot/{tcell_directory_name}"
+        if platform_type == "b_test":
+            tcell_directory_path = f"{project_path}/tools/obot/b_sample_test/b_torque_cell_calibration"
+        else:
+            tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
 
         file_dialog = QFileDialog(self)
         file_dialog.setDirectory(tcell_directory_path)  # Set the current directory
@@ -915,18 +965,42 @@ class BringupTab(MotorTab):
         # Add a reference to this file to the yaml package
         self.update_motor_handler()
         if(self.package_info is not None):
-            # Update package_infor by running update_motor_handler
-            with open(self.robot_package, 'a+') as file:
-                # Append a line to the file
-                print(f"Appending {self.package_info} to {self.robot_package}")
-                try:
-                    file.write(f'\n  - [{self.package_info}]')
-                    QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
-                except Exception as e:
-                    QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            try:
+                self.update_yaml_file()
+                QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+        self.flash_all_btn.setDisabled(False)
+
+    def update_yaml_file(self):
+        new_lines = []
+        serial_number_to_match = current_motor().serial_number()
+        line_added = False
+        with open(self.robot_package, 'r') as file:
+            for line in file:
+                if f"{serial_number_to_match}" in line:
+                    # If a line with this SN exists replace the line with the new setup for that SN
+                    new_lines.append(f'  - [{self.package_info}]\n')
+                    line_added = True
+                else:
+                    new_lines.append(line)
+        if not line_added:
+            # if the SN didn't exist in the file already then add the line to the bottom of the file
+            new_lines.append(f'  - [{self.package_info}]\n')  # Replace line with package_info
+
+        with open(self.robot_package, 'w') as file:
+            file.writelines(new_lines)
 
     def create_file_and_save(self):
-        motor_driver_sn_file = f"{project_path}/tools/obot/motor_driver_parameters/{current_motor().serial_number()}.json"
+        platform_type = self.platform_type_dropdown.currentText()
+        joint_name = self.joint_name_dropdown.currentText()
+        self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
+        print(f"{self.base_config_path}")
+        # TODO uncomment this line when we have `motor_driver_parameters` in the b_sample folder and remove the line below
+        # motor_driver_sn_file = f"{project_path}/tools/obot/{platform_type}/motor_driver_parameters/{current_motor().serial_number()}.json"
+        motor_driver_sn_file = f"{project_path}/tools/obot/a_sample/motor_driver_parameters/{current_motor().serial_number()}.json"
+
         if not os.path.exists(motor_driver_sn_file):
             print(f"Cannot find {motor_driver_sn_file}")
             return
@@ -934,7 +1008,6 @@ class BringupTab(MotorTab):
         dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
                         "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
-        joint_name = self.joint_name_dropdown.currentText()
         self.dest_file = self.robot_directory + "/" + f"{joint_name}" + ".json"
         print(f"Creating a new configuration file at {self.dest_file}")
         with open(self.dest_file, "w") as file:
@@ -947,8 +1020,6 @@ class BringupTab(MotorTab):
             QMessageBox.critical(self, "Error", f"An error occurred while creating the file: {str(e)}")
 
     def update_motor_handler(self):
-        # self.fw_type = self.fw_type_combo_box.currentText()
-        # self.board_type = self.board_types_dict[self.board_type_combo_box.currentText()]
         self.board_type = "RNONE"
         match = re.search(r'([^/]+)\.json$', self.dest_file)
         self.motor_name = match.group(1)
@@ -994,9 +1065,9 @@ class BringupTab(MotorTab):
         self.updating_enabled = False
         try:
             self.motor_handler.run_flash_firmware_routine()
+            time.sleep(6)  
             QMessageBox.information(self, "Success", "The operation was successful!")
             # Wait for the device to show up again
-            time.sleep(6)  
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
         # Reenable updates
@@ -1010,12 +1081,14 @@ class BringupTab(MotorTab):
         self.updating_enabled = False
         try:
             self.motor_handler.run_flash_all_routine()
-            # Wait for the device to show up again
             time.sleep(6)
+            QMessageBox.information(self, "Success", "The operation was successful!")
+            # Wait for the device to show up again
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
         # Reenable updates
         self.updating_enabled = True
+        self.commit_and_push_btn.setDisabled(False)
 
 
 class CalibrateTab(MotorTab):
@@ -1209,7 +1282,6 @@ class CalibrateTab(MotorTab):
         pass
 
     def run_read_runtime_and_save_to_flash_routine(self):
-        print("Reading runtime values and saving to flash")
         motor_name = current_motor().name() #motors[0].name()
         motor_info = {}
         with open(os.path.expanduser(self.device_config_path), "r") as file:
@@ -1217,19 +1289,18 @@ class CalibrateTab(MotorTab):
             for line in data["config"]:
                 if line[0] == current_motor().serial_number():
                     motor_info = {motor_name :{"fw_type": line[1], "pcb_type": line[3], "sn":current_motor().serial_number()}}
-                break
+                    break
 
         self.motor_handler = MotorHandler( self.robot_config_path,
                                             None,
                                             motor_info,
                                             motor_name,
                                             no_firmware_log=True)
-
         self.updating_enabled = False
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         try:
             self.motor_handler.run_read_runtime_and_save_to_flash_routine()
-            time.sleep(2)
+            time.sleep(5)
             QMessageBox.information(self, "Success", "The operation was successful!")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
