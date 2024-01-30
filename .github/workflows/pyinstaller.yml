@@ -32,7 +32,7 @@ jobs:
         curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-obot.sh > install-obot.sh
         chmod +x install-obot.sh
         ./install-obot.sh --no-driver
-        pip install pyinstaller gspread
+        pip install pyinstaller gspread oauth2client paramiko
     - name: build with pyinstaller
       run: |
         export PYTHONPATH=/usr/share/motor-realtime/

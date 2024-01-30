@@ -7,3 +7,5 @@ psutil
 boto3
 git
 gspread
+oauth2client
+paramiko
