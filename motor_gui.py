@@ -24,9 +24,11 @@ import paramiko
 
 from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
 from PyQt5.QtWidgets import (
+    QAction,
     QApplication,
     QLabel,
     QMainWindow,
+    QInputDialog,
     QPushButton,
     QTabWidget,
     QWidget,
@@ -997,9 +999,10 @@ class BringupTab(MotorTab):
         joint_name = self.joint_name_dropdown.currentText()
         self.base_config_path = f"{project_path}/tools/obot/{self.platform_directory_map[platform_type]}/{joint_name}.json"
         print(f"{self.base_config_path}")
+        motor_sn = current_motor().serial_number()
         # TODO uncomment this line when we have `motor_driver_parameters` in the b_sample folder and remove the line below
         # motor_driver_sn_file = f"{project_path}/tools/obot/{platform_type}/motor_driver_parameters/{current_motor().serial_number()}.json"
-        motor_driver_sn_file = f"{project_path}/tools/obot/a_sample/motor_driver_parameters/{current_motor().serial_number()}.json"
+        motor_driver_sn_file = f"{project_path}/tools/obot/a_sample/motor_driver_parameters/{motor_sn}.json"
 
         if not os.path.exists(motor_driver_sn_file):
             print(f"Cannot find {motor_driver_sn_file}")
@@ -1008,7 +1011,7 @@ class BringupTab(MotorTab):
         dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
                         "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
-        self.dest_file = self.robot_directory + "/" + f"{joint_name}" + ".json"
+        self.dest_file = self.robot_directory + "/" + f"{joint_name}_{motor_sn}" + ".json"
         print(f"Creating a new configuration file at {self.dest_file}")
         with open(self.dest_file, "w") as file:
             json.dump(dictionary, file, indent=4)
@@ -1023,8 +1026,6 @@ class BringupTab(MotorTab):
         self.board_type = "RNONE"
         match = re.search(r'([^/]+)\.json$', self.dest_file)
         self.motor_name = match.group(1)
-        # self.motor_name = current_motor().name()
-        self.serial_number = current_motor().serial_number()
         self.compile_opts = self.compile_opts_combo_box.currentText()
         self.package_info = f"\"{current_motor().serial_number()}\", \"{self.fw_type}\", \"{self.motor_name}\", \"\'{self.board_type}\'\""
         motor_info = {self.motor_name :{"fw_type": self.fw_type, "pcb_type": f"\'{self.board_type} {self.compile_opts}\'", "sn":current_motor().serial_number()}}
@@ -1336,14 +1337,19 @@ class MainWindow(QMainWindow):
         for m in motors:
             actions.append(self.motor_menu.addAction(m.name()))
             print(m.name())
-        self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
+        # self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
+
+        # Add an action for entering a custom IP address
+        enter_ip_action = QAction('Enter custom IP', self)
+        self.motor_ip_menu.addAction(enter_ip_action)
+        enter_ip_action.triggered.connect(self.prompt_for_custom_ip)
 
         ips = ["192.168.1.200:7770", "192.168.1.200:7771", "192.168.1.200:7772", "192.168.1.200:7773", "192.168.1.200:7774", "192.168.1.200:7775", 
                "192.168.50.2:7770", "192.168.50.2:7771", "192.168.50.2:7772", "192.168.50.2:7773", "192.168.50.2:7774", "192.168.50.2:7775", 
                "192.168.50.3:7770", "192.168.50.3:7771", "192.168.50.3:7772", "192.168.50.3:7773", "192.168.50.3:7774", "192.168.50.3:7775"]
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
-        self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
+        # self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
 
         self.connect_motor(motors[0].name())
 
@@ -1379,6 +1385,11 @@ class MainWindow(QMainWindow):
         self.tuning_tab.currentChanged.connect(self.new_tuning_tab)
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
+
+    def prompt_for_custom_ip(self):
+        ip, ok = QInputDialog.getText(self, 'Enter Motor IP', 'IP Address:')
+        if ok and ip:
+            self.connect_motor_ip(ip)
 
     def refresh(self):
         # Try to reconnect the motors upon a refresh request
