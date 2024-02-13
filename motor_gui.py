@@ -1331,6 +1331,8 @@ class MainWindow(QMainWindow):
         self.menu_bar.addMenu(self.motor_menu)
         self.motor_ip_menu = QMenu("Motor&IP")
         self.menu_bar.addMenu(self.motor_ip_menu)
+        self.motor_uart_menu = QMenu("Motor&UART")
+        self.menu_bar.addMenu(self.motor_uart_menu)
         self.setMenuBar(self.menu_bar)
         actions = []
         for m in motors:
@@ -1344,6 +1346,11 @@ class MainWindow(QMainWindow):
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
         self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
+
+        uart_devpaths = ["/dev/ttyACM0"]
+        for uart_devpath in uart_devpaths:
+            self.motor_uart_menu.addAction(uart_devpath)
+        self.motor_uart_menu.triggered.connect(lambda action: self.connect_motor_uart(action.text()))
 
         self.connect_motor(motors[0].name())
 
@@ -1407,6 +1414,12 @@ class MainWindow(QMainWindow):
         print("Connecting motor " + ip)
         motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
         self.connect_motor_generic(ip)
+
+    def connect_motor_uart(self, uart_devpath):
+        global cpu_frequency
+        print("Connecting motor " + uart_devpath)
+        motor_manager.get_motors_uart_by_devpath([uart_devpath], raw = True, allow_simulated = self.simulated)
+        self.connect_motor_generic(uart_devpath)
 
     def connect_motor(self, name):
          global cpu_frequency
