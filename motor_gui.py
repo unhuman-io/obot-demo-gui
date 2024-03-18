@@ -110,10 +110,15 @@ class NumberEdit(QWidget):
         self.number_widget.setText(num)
 
     def getNumber(self):
-        return float(self.number_widget.text())
+        val = 0.0
+        try:
+            val = float(self.number_widget.text())
+        except ValueError:
+            pass
+        return val
 
     def editingFinished(self):
-        self.signal.emit(float(self.number_widget.text()))
+        self.signal.emit(self.getNumber())
 
 class NumberDisplay(NumberEdit):
     def __init__(self, *args, **kwargs):
@@ -170,7 +175,10 @@ class APIBool(QWidget):
 
     def update(self):
         val = current_motor()[self.name].get()
-        self.checkbox.setChecked(float(val) != 0)
+        try:
+            self.checkbox.setChecked(float(val) != 0)
+        except ValueError:
+            pass
     
     def clicked(self, on):
         if on:
@@ -185,7 +193,11 @@ class APIDir(APIBool):
         super(APIDir, self).__init__(*args, **kwargs)
 
     def update(self):
-        val = float(current_motor()[self.name].get())
+        val = 0.0
+        try:
+            val = float(current_motor()[self.name].get())
+        except ValueError:
+            pass
         status = val == 1.0 or val == 0.0
         self.checkbox.setChecked(status)
 
@@ -211,7 +223,10 @@ class NumberEditSlider(NumberEdit):
         self.signal.emit(float(value))
 
     def valueChangedEdit(self):
-        self.slider.setValue(int(float(self.number_widget.text())))
+        try:
+            self.slider.setValue(int(float(self.number_widget.text())))
+        except ValueError:
+            pass
 
 class ParameterEdit(NumberEdit):
     def __init__(self, *args, **kwargs):
@@ -499,7 +514,11 @@ class PlotTab(MotorTab):
         plot_str = self.combo_box.currentText()
         print(plot_str)
         if plot_str == "encoder_error":
-            self.gear_ratio = float(current_motor()["gear_ratio"].get())
+            self.gear_ratio = 1
+            try:
+                self.gear_ratio = float(current_motor()["gear_ratio"].get())
+            except ValueError:
+                pass
             self.chart.length=10000
         else:
             self.chart.length=500
@@ -655,7 +674,10 @@ class VelocityTab(MotorTab):
         self.mcu_timestamp = self.status.mcu_timestamp
         dp = self.status.motor_position - self.motor_position
         self.motor_position = self.status.motor_position
-        self.velocity_measured.setNumber(dp/dt)
+        try:
+            self.velocity_measured.setNumber(dp/dt)
+        except ZeroDivisionError:
+            pass
 
         if (abs(dp/dt) < 10000):
             # reject rollovers
@@ -671,7 +693,11 @@ class VelocityTab(MotorTab):
                 pass
 
     def velocity_update(self):
-        p = float(self.widget.number_widget.text())
+        p = 0.0
+        try:
+            p = float(self.widget.number_widget.text())
+        except ValueError:
+            pass
         print("velocity command " + str(p))
         motor_manager.clear_commands()
         motor_manager.set_command_velocity([p])
@@ -1740,23 +1766,35 @@ class CurrentTuningTab(MotorTab):
         motor_manager.write([self.command])
 
     def amplitude_update(self):
-        self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
-        self.command_update()
+        try:
+            self.command.current_tuning.amplitude = float(self.amplitude.number_widget.text())
+            self.command_update()
+        except ValueError:
+            pass
 
     def bias_update(self):
-        self.command.current_tuning.bias = float(self.bias.number_widget.text())
-        self.command_update()
+        try:
+            self.command.current_tuning.bias = float(self.bias.number_widget.text())
+            self.command_update()
+        except ValueError:
+            pass
 
     def frequency_update(self):
-        self.command.current_tuning.frequency = float(self.frequency.number_widget.text())
-        self.command_update()
+        try:
+            self.command.current_tuning.frequency = float(self.frequency.number_widget.text())
+            self.command_update()
+        except ValueError:
+            pass
 
     def mode_update(self, selection):
-        self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
-        if self.command.current_tuning.mode == motor.TuningMode.Chirp:
-            self.bode_window = BodeWindow()
-            self.bode_window.show()
-        self.command_update()
+        try:
+            self.command.current_tuning.mode = int(motor.TuningMode.__members__[selection])
+            if self.command.current_tuning.mode == motor.TuningMode.Chirp:
+                self.bode_window = BodeWindow()
+                self.bode_window.show()
+            self.command_update()
+        except ValueError:
+            pass
 
 
 class StreamingChart(QChartView):
@@ -1880,7 +1918,11 @@ class PositionTuningTab(MotorTab):
         self.t_seconds += dt
         self.mcu_timestamp = self.status.mcu_timestamp
 
-        error = float(current_motor()["error"].get())
+        error = 0.0
+        try:
+            error = float(current_motor()["error"].get())
+        except ValueError:
+            pass
         desired = self.status.motor_position + error
 
         self.chart.update(self.t_seconds, [self.status.motor_position, desired])
@@ -1900,26 +1942,38 @@ class PositionTuningTab(MotorTab):
         motor_manager.write([self.command])
 
     def amplitude_update(self):
-        self.command.position_tuning.amplitude = float(self.amplitude.number_widget.text())
-        print("amplitude: {}".format(self.command.current_tuning.amplitude))
-        self.command_update()
+        try:
+            self.command.position_tuning.amplitude = float(self.amplitude.number_widget.text())
+            print("amplitude: {}".format(self.command.current_tuning.amplitude))
+            self.command_update()
+        except ValueError:
+            pass
 
     def bias_update(self):
-        self.command.position_tuning.bias = float(self.bias.number_widget.text())
-        self.command_update()
+        try:
+            self.command.position_tuning.bias = float(self.bias.number_widget.text())
+            self.command_update()
+        except ValueError:
+            pass
 
     def frequency_update(self):
-        self.command.position_tuning.frequency = float(self.frequency.number_widget.text())
-        self.command_update()
+        try:
+            self.command.position_tuning.frequency = float(self.frequency.number_widget.text())
+            self.command_update()
+        except ValueError:
+            pass
 
     def mode_update(self, selection):
-        self.command.position_tuning.mode = int(motor.TuningMode.__members__[selection])
-        if self.command.position_tuning.mode == motor.TuningMode.Chirp:
-            self.bode_window = BodeWindow()
-            self.bode_window.set_frequency_limits(1, 500)
-            self.bode_window.set_magnitude_limits(-40,10)
-            self.bode_window.show()
-        self.command_update()
+        try:
+            self.command.position_tuning.mode = int(motor.TuningMode.__members__[selection])
+            if self.command.position_tuning.mode == motor.TuningMode.Chirp:
+                self.bode_window = BodeWindow()
+                self.bode_window.set_frequency_limits(1, 500)
+                self.bode_window.set_magnitude_limits(-40,10)
+                self.bode_window.show()
+            self.command_update()
+        except ValueError:
+            pass
 
 class StepperTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -1930,9 +1984,9 @@ class StepperTab(MotorTab):
         self.current = 0.
         self.velocity = 0.
         num_poles = current_motor()["num_poles"].get()
-        if (num_poles):
+        try:
             self.num_poles = float(num_poles)
-        else:
+        except ValueError:
             self.num_poles = 1
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -2015,19 +2069,28 @@ class StepperTab(MotorTab):
         motor_manager.write_saved_commands()
 
     def current_update(self):
-        self.current = float(self.current_slider.number_widget.text())
-        print("current: {}".format(self.current))
-        self.command_update()
-        self.current_chart.removePoints()
-        self.voltage_chart.removePoints()
+        try:
+            self.current = float(self.current_slider.number_widget.text())
+            print("current: {}".format(self.current))
+            self.command_update()
+            self.current_chart.removePoints()
+            self.voltage_chart.removePoints()
+        except ValueError:
+            pass
 
     def velocity_update(self):
-        self.velocity = float(self.velocity_slider.number_widget.text())
-        self.command_update()
-    
+        try:
+            self.velocity = float(self.velocity_slider.number_widget.text())
+            self.command_update()
+        except ValueError:
+            pass
+
     def num_points_update(self, value):
-        self.current_chart.length = int(value)
-        self.voltage_chart.length = int(value)
+        try:
+            self.current_chart.length = int(value)
+            self.voltage_chart.length = int(value)
+        except ValueError:
+            pass
         self.current_chart.removePoints()
         self.voltage_chart.removePoints()
 
