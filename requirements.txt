@@ -5,7 +5,7 @@ pyyaml
 # external dependancies
 psutil
 boto3
-git
+gitpython
 gspread
 oauth2client
 paramiko
