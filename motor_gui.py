@@ -679,10 +679,16 @@ class VelocityTab(MotorTab):
         except ZeroDivisionError:
             pass
 
-        if (abs(dp/dt) < 10000):
+        vel = 0
+        try:
+            vel = dp/dt
+        except ZeroDivisionError:
+            pass
+        
+        if (abs(vel) < 10000):
             # reject rollovers
             try:
-                self.series.append(self.t_seconds, dp/dt)
+                self.series.append(self.t_seconds, vel)
                 if len(self.series) > 200:
                     self.series.remove(0)
                 self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
