@@ -718,13 +718,14 @@ class LogTab(MotorTab):
                 self.widget.appendPlainText(log)
 
 class BringupTab(MotorTab):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, main_window, *args, **kwargs):
         super(BringupTab, self).__init__(*args, **kwargs)
 
         self.name = "bringup"
         self.updating_enabled = True
         self.motor_handler = None
         self.package_info = None
+        self.main_window = main_window
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -754,14 +755,15 @@ class BringupTab(MotorTab):
         self.torque_cell_type_dropdown = QComboBox(self)
         self.result_label = QLabel('Firmware Config: ', self)
 
-        self.platform_type_dropdown.addItems(['a_sample', 'b_test', 'hands'])
+        self.platform_type_dropdown.addItems(['a_sample', 'b_test', 'hands', 'f100_spi'])
         self.joint_name_dropdown.addItems(self.all_a_joints)
         self.torque_cell_type_dropdown.addItems(self.all_tcell_types)
 
 
         self.platform_directory_map = { "a_sample": "a_sample/actuator_parameters_idir",
                                         "b_test": "b_sample_test/actuator_parameters",
-                                        "hands": "a_sample/palm"}
+                                        "hands": "a_sample/palm",
+                                        "f100_spi": "b_sample/actuator_parameters"}
 
         self.update_firmware()
         # Open a file dialog to select files for upload
@@ -830,7 +832,7 @@ class BringupTab(MotorTab):
             self.joint_name_dropdown.addItems(self.all_a_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure", "futek", "nmb"])
-        elif platform_type == 'b_test':
+        elif platform_type == 'b_test' or platform_type == "f100_spi":
             self.joint_name_dropdown.addItems(self.all_b_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure"])
@@ -853,7 +855,7 @@ class BringupTab(MotorTab):
                 self.fw_type = f"{platform_type}_ankle_y"                 
             else:
                 self.fw_type = f"{platform_type}_{selected_tcell_type}_without_enc"
-        elif platform_type == "b_test":
+        elif platform_type == "b_test" or platform_type == "f100_spi":
             if "ankle_y" in joint_name:
                 self.fw_type = f"{platform_type}_ld"
             elif ("ankle_x" in joint_name) or ("forearm_twist" in joint_name) or ("wrist" in joint_name):
@@ -1012,6 +1014,7 @@ class BringupTab(MotorTab):
                         "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
         self.dest_file = self.robot_directory + "/" + f"{joint_name}_{motor_sn}" + ".json"
+
         print(f"Creating a new configuration file at {self.dest_file}")
         with open(self.dest_file, "w") as file:
             json.dump(dictionary, file, indent=4)
@@ -1093,8 +1096,9 @@ class BringupTab(MotorTab):
 
 
 class CalibrateTab(MotorTab):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, main_window, *args, **kwargs):
         super(CalibrateTab, self).__init__(*args, **kwargs)
+        self.main_window = main_window
 
         self.name = "calibrate"
         self.numbers = []
@@ -1215,8 +1219,8 @@ class CalibrateTab(MotorTab):
         save_to_flash_layout.addWidget(self.robot_label)
         layout.addLayout(save_to_flash_layout)
 
-        self.button = QPushButton("Save runtime values to flash")
-        self.button.setToolTip("Save to flash")
+        self.button = QPushButton("Save runtime values")
+        self.button.setToolTip("Save runtime values")
         self.button.clicked.connect(self.run_read_runtime_and_save_to_flash_routine)
         save_to_flash_layout.addWidget(self.button)
         layout.addLayout(save_to_flash_layout)
@@ -1241,12 +1245,15 @@ class CalibrateTab(MotorTab):
         return package_dict
 
     def select_yaml_package(self) -> None:
+        # TODO: why does native Dialog not work here?
+        # file_dialog = QFileDialog(self)
+        # file_dialog.setDirectory(path)  # Set the current directory
+        # self.device_config_path, _ = file_dialog.getOpenFileName(self, "Select File", "")
         # Open a file dialog to select files for upload
-        file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
-        self.device_config_path, _ = file_dialog.getOpenFileName(self, "Select File", "")
+        path = f"{project_path}/tools/obot/"
+        self.device_config_path, _ = QFileDialog.getOpenFileName(self, "Select File", path, options=QFileDialog.DontUseNativeDialog)
+        print(self.main_window.get_ip_address())
         self.robot_config_path = os.path.dirname(self.device_config_path)
-        # self.robot_config_path = str(QFileDialog.getOpenFileName(self, "Select Directory"))
         print(f"Setting obot_config_path to: {self.robot_config_path}")
         self.robot_label.setText(self.robot_config_path)
 
@@ -1285,6 +1292,8 @@ class CalibrateTab(MotorTab):
     def run_read_runtime_and_save_to_flash_routine(self):
         motor_name = current_motor().name() #motors[0].name()
         motor_info = {}
+        ip_address = self.main_window.get_ip_address()
+        print(ip_address)
         with open(os.path.expanduser(self.device_config_path), "r") as file:
             data = yaml.safe_load(file)
             for line in data["config"]:
@@ -1300,7 +1309,7 @@ class CalibrateTab(MotorTab):
         self.updating_enabled = False
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         try:
-            self.motor_handler.run_read_runtime_and_save_to_flash_routine()
+            self.motor_handler.run_read_runtime_and_save_to_flash_routine(flash = False, ip_address = ip_address)
             time.sleep(5)
             QMessageBox.information(self, "Success", "The operation was successful!")
         except Exception as e:
@@ -1338,9 +1347,8 @@ class MainWindow(QMainWindow):
             actions.append(self.motor_menu.addAction(m.name()))
             print(m.name())
         self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
-
-        ips = ["Enter custom IP", "192.168.1.200:7770", "192.168.1.200:7771", "192.168.1.200:7772", "192.168.1.200:7773", "192.168.1.200:7774", "192.168.1.200:7775", 
-               "192.168.50.2:7770", "192.168.50.2:7771", "192.168.50.2:7772", "192.168.50.2:7773", "192.168.50.2:7774", "192.168.50.2:7775", 
+        self.ip_address = None
+        ips = ["Enter custom IP", "192.168.50.10:7770", "192.168.50.2:7770", "192.168.50.2:7771", "192.168.50.2:7772", "192.168.50.2:7773", "192.168.50.2:7774", "192.168.50.2:7775", 
                "192.168.50.3:7770", "192.168.50.3:7771", "192.168.50.3:7772", "192.168.50.3:7773", "192.168.50.3:7774", "192.168.50.3:7775"]
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
@@ -1364,11 +1372,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(VelocityTab(), "velocity")
         self.tabs.addTab(LogTab(), "log")
         #self.tabs.addTab(self.tuning_tab, "tuning")
-        self.tabs.addTab(CalibrateTab(), "calibrate")
+        self.tabs.addTab(CalibrateTab(self), "calibrate")
         self.tabs.addTab(CurrentTuningTab(), "current tuning")
         self.tabs.addTab(PositionTuningTab(), "position tuning")
         self.tabs.addTab(StepperTab(), "stepper")
-        self.tabs.addTab(BringupTab(), "bringup")
+        self.tabs.addTab(BringupTab(self), "bringup")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
@@ -1408,6 +1416,9 @@ class MainWindow(QMainWindow):
         self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
         self.connect_motor(motors[0].name())
 
+    def get_ip_address(self):
+        return self.ip_address
+
     def connect_motor_ip(self, ip):
         global cpu_frequency
         # Add an action for entering a custom IP address
@@ -1416,6 +1427,7 @@ class MainWindow(QMainWindow):
             return
 
         print("Connecting motor " + ip)
+        self.ip_address = ip
         motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
         self.connect_motor_generic(ip)
 
