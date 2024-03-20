@@ -77,6 +77,16 @@ def mode_open():
     motor_manager.set_command_mode(motor.ModeDesired.Open)
     motor_manager.write_saved_commands()
 
+def is_ip_address(s):
+    # Define the regex pattern for an IP address or IP-like string with 'X' as a placeholder
+    pattern = r'^(\d{1,3}\.){3}(\d{1,3}|X)$'
+    
+    # Use re.match to check if the string matches the pattern
+    if re.match(pattern, s):
+        return True  # The string is an IP address or an IP-like string
+    else:
+        return False  # The string does not match the pattern
+
 class NumberEdit(QWidget):
     signal = pyqtSignal(float)
     def __init__(self, name, description=None, tooltip=None, value=0):
@@ -750,13 +760,14 @@ class LogTab(MotorTab):
                 self.widget.appendPlainText(log)
 
 class BringupTab(MotorTab):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, main_window, *args, **kwargs):
         super(BringupTab, self).__init__(*args, **kwargs)
 
         self.name = "bringup"
         self.updating_enabled = True
         self.motor_handler = None
         self.package_info = None
+        self.main_window = main_window
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -786,14 +797,17 @@ class BringupTab(MotorTab):
         self.torque_cell_type_dropdown = QComboBox(self)
         self.result_label = QLabel('Firmware Config: ', self)
 
-        self.platform_type_dropdown.addItems(['a_sample', 'b_test', 'hands'])
+        self.platform_type_dropdown.addItems(['a_sample', 'b_test', 'hands', 'f100_spi', "f100_spi_ld", "f50_uart"])
         self.joint_name_dropdown.addItems(self.all_a_joints)
         self.torque_cell_type_dropdown.addItems(self.all_tcell_types)
 
 
         self.platform_directory_map = { "a_sample": "a_sample/actuator_parameters_idir",
                                         "b_test": "b_sample_test/actuator_parameters",
-                                        "hands": "a_sample/palm"}
+                                        "hands": "a_sample/palm",
+                                        "f100_spi": "b_sample/actuator_parameters",
+                                        "f100_spi_ld": "b_sample/actuator_parameters",
+                                        "f50_uart": "b_sample/actuator_parameters"}
 
         self.update_firmware()
         # Open a file dialog to select files for upload
@@ -862,7 +876,7 @@ class BringupTab(MotorTab):
             self.joint_name_dropdown.addItems(self.all_a_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure", "futek", "nmb"])
-        elif platform_type == 'b_test':
+        elif platform_type == 'b_test' or platform_type == "f100_spi":
             self.joint_name_dropdown.addItems(self.all_b_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure"])
@@ -885,13 +899,15 @@ class BringupTab(MotorTab):
                 self.fw_type = f"{platform_type}_ankle_y"                 
             else:
                 self.fw_type = f"{platform_type}_{selected_tcell_type}_without_enc"
-        elif platform_type == "b_test":
+        elif platform_type == "b_test" or platform_type == "f100_spi":
             if "ankle_y" in joint_name:
                 self.fw_type = f"{platform_type}_ld"
             elif ("ankle_x" in joint_name) or ("forearm_twist" in joint_name) or ("wrist" in joint_name):
                 self.fw_type = f"{platform_type}_hd11-14"
             else:
                 self.fw_type = f"{platform_type}"
+        elif platform_type == "f100_spi" or platform_type == "f50_uart" or platform_type == "f100_spi_ld":
+                self.fw_type = f"{platform_type}"            
         elif platform_type == "hands":
             self.fw_type = "hands"
 
@@ -1044,6 +1060,7 @@ class BringupTab(MotorTab):
                         "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
         self.dest_file = self.robot_directory + "/" + f"{joint_name}_{motor_sn}" + ".json"
+
         print(f"Creating a new configuration file at {self.dest_file}")
         with open(self.dest_file, "w") as file:
             json.dump(dictionary, file, indent=4)
@@ -1125,8 +1142,9 @@ class BringupTab(MotorTab):
 
 
 class CalibrateTab(MotorTab):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, main_window, *args, **kwargs):
         super(CalibrateTab, self).__init__(*args, **kwargs)
+        self.main_window = main_window
 
         self.name = "calibrate"
         self.numbers = []
@@ -1247,8 +1265,8 @@ class CalibrateTab(MotorTab):
         save_to_flash_layout.addWidget(self.robot_label)
         layout.addLayout(save_to_flash_layout)
 
-        self.button = QPushButton("Save runtime values to flash")
-        self.button.setToolTip("Save to flash")
+        self.button = QPushButton("Save runtime values")
+        self.button.setToolTip("Save runtime values")
         self.button.clicked.connect(self.run_read_runtime_and_save_to_flash_routine)
         save_to_flash_layout.addWidget(self.button)
         layout.addLayout(save_to_flash_layout)
@@ -1273,12 +1291,15 @@ class CalibrateTab(MotorTab):
         return package_dict
 
     def select_yaml_package(self) -> None:
+        # TODO: why does native Dialog not work here?
+        # file_dialog = QFileDialog(self)
+        # file_dialog.setDirectory(path)  # Set the current directory
+        # self.device_config_path, _ = file_dialog.getOpenFileName(self, "Select File", "")
         # Open a file dialog to select files for upload
-        file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(project_path + "/tools/obot/")  # Set the current directory
-        self.device_config_path, _ = file_dialog.getOpenFileName(self, "Select File", "")
+        path = f"{project_path}/tools/obot/"
+        self.device_config_path, _ = QFileDialog.getOpenFileName(self, "Select File", path, options=QFileDialog.DontUseNativeDialog)
+        print(self.main_window.get_ip_address())
         self.robot_config_path = os.path.dirname(self.device_config_path)
-        # self.robot_config_path = str(QFileDialog.getOpenFileName(self, "Select Directory"))
         print(f"Setting obot_config_path to: {self.robot_config_path}")
         self.robot_label.setText(self.robot_config_path)
 
@@ -1317,6 +1338,8 @@ class CalibrateTab(MotorTab):
     def run_read_runtime_and_save_to_flash_routine(self):
         motor_name = current_motor().name() #motors[0].name()
         motor_info = {}
+        ip_address = self.main_window.get_ip_address()
+        print(ip_address)
         with open(os.path.expanduser(self.device_config_path), "r") as file:
             data = yaml.safe_load(file)
             for line in data["config"]:
@@ -1332,7 +1355,7 @@ class CalibrateTab(MotorTab):
         self.updating_enabled = False
         # Disable updating while flashing the device since it will be nonresponsive in dfu mode
         try:
-            self.motor_handler.run_read_runtime_and_save_to_flash_routine()
+            self.motor_handler.run_read_runtime_and_save_to_flash_routine(flash = False, ip_address = ip_address)
             time.sleep(5)
             QMessageBox.information(self, "Success", "The operation was successful!")
         except Exception as e:
@@ -1370,13 +1393,44 @@ class MainWindow(QMainWindow):
             actions.append(self.motor_menu.addAction(m.name()))
             print(m.name())
         self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
+        self.ip_address = None
 
-        ips = ["Enter custom IP", "192.168.1.200:7770", "192.168.1.200:7771", "192.168.1.200:7772", "192.168.1.200:7773", "192.168.1.200:7774", "192.168.1.200:7775", 
-               "192.168.50.2:7770", "192.168.50.2:7771", "192.168.50.2:7772", "192.168.50.2:7773", "192.168.50.2:7774", "192.168.50.2:7775", 
-               "192.168.50.3:7770", "192.168.50.3:7771", "192.168.50.3:7772", "192.168.50.3:7773", "192.168.50.3:7774", "192.168.50.3:7775"]
+        self.joint_to_ip_map = {
+            "left_hip_y": "192.168.50.10",
+            "left_hip_x": "192.168.50.11",
+            "left_hip_z": "192.168.50.12",
+            "left_knee": "192.168.50.13",
+            "left_ankle_y": "192.168.50.14",
+            "left_ankle_x": "192.168.50.15",
+            "left_shoulder_j1": "192.168.50.30",
+            "left_shoulder_j2": "192.168.50.31",
+            "left_upper_arm_twist": "192.168.50.32",
+            "left_elbow": "192.168.50.33",
+            "left_forearm_twist": "192.168.50.34",
+            "left_wrist_pitch": "192.168.50.34",
+            "left_wrist_yaw": "192.168.50.34",
+            "right_hip_y": "192.168.50.40",
+            "right_hip_x": "192.168.50.41",
+            "right_hip_z": "192.168.50.42",
+            "right_knee": "192.168.50.43",
+            "right_ankle_y": "192.168.50.44",
+            "right_ankle_x": "192.168.50.56",
+            "right_shoulder_j1": "192.168.50.20",
+            "right_shoulder_j2": "192.168.50.21",
+            "right_upper_arm_twist": "192.168.50.22",
+            "right_elbow": "192.168.50.23",
+            "right_forearm_twist": "192.168.50.24",
+            "right_wrist_pitch": "192.168.50.24",
+            "right_wrist_yaw": "192.168.50.24",
+            "spine_z": "192.168.50.50",
+            "spine_x": "192.168.50.51",
+        }
+
+        ips = ["Enter custom IP or joint_name",
+         "192.168.50.200:7770"]
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
-        self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
+        self.motor_ip_menu.triggered.connect(lambda action: self.prompt_for_custom_ip())
 
         self.connect_motor(motors[0].name())
 
@@ -1396,11 +1450,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(VelocityTab(), "velocity")
         self.tabs.addTab(LogTab(), "log")
         #self.tabs.addTab(self.tuning_tab, "tuning")
-        self.tabs.addTab(CalibrateTab(), "calibrate")
+        self.tabs.addTab(CalibrateTab(self), "calibrate")
         self.tabs.addTab(CurrentTuningTab(), "current tuning")
         self.tabs.addTab(PositionTuningTab(), "position tuning")
         self.tabs.addTab(StepperTab(), "stepper")
-        self.tabs.addTab(BringupTab(), "bringup")
+        self.tabs.addTab(BringupTab(self), "bringup")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
@@ -1414,7 +1468,7 @@ class MainWindow(QMainWindow):
             self.showFullScreen()
 
     def prompt_for_custom_ip(self):
-        ip, ok = QInputDialog.getText(self, 'Enter Motor IP', 'IP Address:')
+        ip, ok = QInputDialog.getText(self, 'Enter Motor IP or Motor name', 'IP Address:')
         if ok and ip:
             self.connect_motor_ip(ip)
 
@@ -1440,14 +1494,24 @@ class MainWindow(QMainWindow):
         self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
         self.connect_motor(motors[0].name())
 
-    def connect_motor_ip(self, ip):
+    def get_ip_address(self):
+        return self.ip_address
+
+    def connect_motor_ip(self, text):
         global cpu_frequency
-        # Add an action for entering a custom IP address
-        if ip == "Enter custom IP":
-            self.prompt_for_custom_ip()
-            return
+        ip = None
+        if is_ip_address(text):
+            ip = text
+        else:
+            if text in self.joint_to_ip_map.keys():
+                ip = self.joint_to_ip_map[text]
+                print(ip)
+            else:
+                raise RuntimeError(f"IP address for {text} is not defined")
+
 
         print("Connecting motor " + ip)
+        self.ip_address = ip
         motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
         self.connect_motor_generic(ip)
 
