@@ -899,7 +899,7 @@ class BringupTab(MotorTab):
                 self.fw_type = f"{platform_type}_ankle_y"                 
             else:
                 self.fw_type = f"{platform_type}_{selected_tcell_type}_without_enc"
-        elif platform_type == "b_test" or platform_type == "f100_spi":
+        elif platform_type == "b_test":
             if "ankle_y" in joint_name:
                 self.fw_type = f"{platform_type}_ld"
             elif ("ankle_x" in joint_name) or ("forearm_twist" in joint_name) or ("wrist" in joint_name):
@@ -991,6 +991,8 @@ class BringupTab(MotorTab):
         tcell_directory_name = tcell_directory_map[selected_tcell_type]
         if platform_type == "b_test":
             tcell_directory_path = f"{project_path}/tools/obot/b_sample_test/b_torque_cell_calibration"
+        elif platform_type == "f100_spi_ld" or platform_type == "f100_spi" or platform_type == "f50_uart":
+            tcell_directory_path = f"{project_path}/tools/obot/b_sample/b_torque_cell_calibration/"            
         else:
             tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
 
@@ -1053,12 +1055,15 @@ class BringupTab(MotorTab):
         motor_driver_sn_file = f"{project_path}/tools/obot/a_sample/motor_driver_parameters/{motor_sn}.json"
 
         if not os.path.exists(motor_driver_sn_file):
-            print(f"Cannot find {motor_driver_sn_file}")
-            return
-        # Create the file with the name given by the user
-        dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
+            print(f"Cannot find {motor_driver_sn_file} so we're not including it")
+            dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
+                        "inherits1": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
+        else:
+            dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
                         "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
+        
+        # Create the file with the name given by the user
         self.dest_file = self.robot_directory + "/" + f"{joint_name}_{motor_sn}" + ".json"
 
         print(f"Creating a new configuration file at {self.dest_file}")
@@ -1427,10 +1432,10 @@ class MainWindow(QMainWindow):
         }
 
         ips = ["Enter custom IP or joint_name",
-         "192.168.50.200:7770"]
+                "192.168.50.200"]
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
-        self.motor_ip_menu.triggered.connect(lambda action: self.prompt_for_custom_ip())
+        self.motor_ip_menu.triggered.connect(lambda action: self.handle_menu_action(action.text()))
 
         self.connect_motor(motors[0].name())
 
@@ -1466,6 +1471,13 @@ class MainWindow(QMainWindow):
         self.tuning_tab.currentChanged.connect(self.new_tuning_tab)
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
+
+    def handle_menu_action(self, text):
+        # Check the text of the action to determine what to do
+        if "Enter" in text:
+            self.prompt_for_custom_ip()
+        else:
+            self.connect_motor_ip(text)
 
     def prompt_for_custom_ip(self):
         ip, ok = QInputDialog.getText(self, 'Enter Motor IP or Motor name', 'IP Address:')
@@ -1505,10 +1517,8 @@ class MainWindow(QMainWindow):
         else:
             if text in self.joint_to_ip_map.keys():
                 ip = self.joint_to_ip_map[text]
-                print(ip)
             else:
                 raise RuntimeError(f"IP address for {text} is not defined")
-
 
         print("Connecting motor " + ip)
         self.ip_address = ip
