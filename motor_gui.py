@@ -1432,10 +1432,10 @@ class MainWindow(QMainWindow):
         }
 
         ips = ["Enter custom IP or joint_name",
-         "192.168.50.200:7770"]
+                "192.168.50.200"]
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
-        self.motor_ip_menu.triggered.connect(lambda action: self.prompt_for_custom_ip())
+        self.motor_ip_menu.triggered.connect(lambda action: self.handle_menu_action(action.text()))
 
         self.connect_motor(motors[0].name())
 
@@ -1471,6 +1471,13 @@ class MainWindow(QMainWindow):
         self.tuning_tab.currentChanged.connect(self.new_tuning_tab)
         if "-fullscreen" in QCoreApplication.arguments():
             self.showFullScreen()
+
+    def handle_menu_action(self, text):
+        # Check the text of the action to determine what to do
+        if "Enter" in text:
+            self.prompt_for_custom_ip()
+        else:
+            self.connect_motor_ip(text)
 
     def prompt_for_custom_ip(self):
         ip, ok = QInputDialog.getText(self, 'Enter Motor IP or Motor name', 'IP Address:')
@@ -1510,10 +1517,8 @@ class MainWindow(QMainWindow):
         else:
             if text in self.joint_to_ip_map.keys():
                 ip = self.joint_to_ip_map[text]
-                print(ip)
             else:
                 raise RuntimeError(f"IP address for {text} is not defined")
-
 
         print("Connecting motor " + ip)
         self.ip_address = ip
