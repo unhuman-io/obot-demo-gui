@@ -77,6 +77,16 @@ def mode_open():
     motor_manager.set_command_mode(motor.ModeDesired.Open)
     motor_manager.write_saved_commands()
 
+def is_ip_address(s):
+    # Define the regex pattern for an IP address or IP-like string with 'X' as a placeholder
+    pattern = r'^(\d{1,3}\.){3}(\d{1,3}|X)$'
+    
+    # Use re.match to check if the string matches the pattern
+    if re.match(pattern, s):
+        return True  # The string is an IP address or an IP-like string
+    else:
+        return False  # The string does not match the pattern
+
 class NumberEdit(QWidget):
     signal = pyqtSignal(float)
     def __init__(self, name, description=None, tooltip=None, value=0):
@@ -755,7 +765,7 @@ class BringupTab(MotorTab):
         self.torque_cell_type_dropdown = QComboBox(self)
         self.result_label = QLabel('Firmware Config: ', self)
 
-        self.platform_type_dropdown.addItems(['a_sample', 'b_test', 'hands', 'f100_spi'])
+        self.platform_type_dropdown.addItems(['a_sample', 'b_test', 'hands', 'f100_spi', "f100_spi_ld", "f50_uart"])
         self.joint_name_dropdown.addItems(self.all_a_joints)
         self.torque_cell_type_dropdown.addItems(self.all_tcell_types)
 
@@ -763,7 +773,9 @@ class BringupTab(MotorTab):
         self.platform_directory_map = { "a_sample": "a_sample/actuator_parameters_idir",
                                         "b_test": "b_sample_test/actuator_parameters",
                                         "hands": "a_sample/palm",
-                                        "f100_spi": "b_sample/actuator_parameters"}
+                                        "f100_spi": "b_sample/actuator_parameters",
+                                        "f100_spi_ld": "b_sample/actuator_parameters",
+                                        "f50_uart": "b_sample/actuator_parameters"}
 
         self.update_firmware()
         # Open a file dialog to select files for upload
@@ -862,6 +874,8 @@ class BringupTab(MotorTab):
                 self.fw_type = f"{platform_type}_hd11-14"
             else:
                 self.fw_type = f"{platform_type}"
+        elif platform_type == "f100_spi" or platform_type == "f50_uart" or platform_type == "f100_spi_ld":
+                self.fw_type = f"{platform_type}"            
         elif platform_type == "hands":
             self.fw_type = "hands"
 
@@ -1348,11 +1362,43 @@ class MainWindow(QMainWindow):
             print(m.name())
         self.motor_menu.triggered.connect(lambda action: self.connect_motor(action.text()))
         self.ip_address = None
-        ips = ["Enter custom IP", "192.168.50.10:7770", "192.168.50.2:7770", "192.168.50.2:7771", "192.168.50.2:7772", "192.168.50.2:7773", "192.168.50.2:7774", "192.168.50.2:7775", 
-               "192.168.50.3:7770", "192.168.50.3:7771", "192.168.50.3:7772", "192.168.50.3:7773", "192.168.50.3:7774", "192.168.50.3:7775"]
+
+        self.joint_to_ip_map = {
+            "left_hip_y": "192.168.50.10",
+            "left_hip_x": "192.168.50.11",
+            "left_hip_z": "192.168.50.12",
+            "left_knee": "192.168.50.13",
+            "left_ankle_y": "192.168.50.14",
+            "left_ankle_x": "192.168.50.15",
+            "left_shoulder_j1": "192.168.50.30",
+            "left_shoulder_j2": "192.168.50.31",
+            "left_upper_arm_twist": "192.168.50.32",
+            "left_elbow": "192.168.50.33",
+            "left_forearm_twist": "192.168.50.34",
+            "left_wrist_pitch": "192.168.50.34",
+            "left_wrist_yaw": "192.168.50.34",
+            "right_hip_y": "192.168.50.40",
+            "right_hip_x": "192.168.50.41",
+            "right_hip_z": "192.168.50.42",
+            "right_knee": "192.168.50.43",
+            "right_ankle_y": "192.168.50.44",
+            "right_ankle_x": "192.168.50.56",
+            "right_shoulder_j1": "192.168.50.20",
+            "right_shoulder_j2": "192.168.50.21",
+            "right_upper_arm_twist": "192.168.50.22",
+            "right_elbow": "192.168.50.23",
+            "right_forearm_twist": "192.168.50.24",
+            "right_wrist_pitch": "192.168.50.24",
+            "right_wrist_yaw": "192.168.50.24",
+            "spine_z": "192.168.50.50",
+            "spine_x": "192.168.50.51",
+        }
+
+        ips = ["Enter custom IP or joint_name",
+         "192.168.50.200:7770"]
         for ip in ips:
             self.motor_ip_menu.addAction(ip)
-        self.motor_ip_menu.triggered.connect(lambda action: self.connect_motor_ip(action.text()))
+        self.motor_ip_menu.triggered.connect(lambda action: self.prompt_for_custom_ip())
 
         self.connect_motor(motors[0].name())
 
@@ -1390,7 +1436,7 @@ class MainWindow(QMainWindow):
             self.showFullScreen()
 
     def prompt_for_custom_ip(self):
-        ip, ok = QInputDialog.getText(self, 'Enter Motor IP', 'IP Address:')
+        ip, ok = QInputDialog.getText(self, 'Enter Motor IP or Motor name', 'IP Address:')
         if ok and ip:
             self.connect_motor_ip(ip)
 
@@ -1419,12 +1465,18 @@ class MainWindow(QMainWindow):
     def get_ip_address(self):
         return self.ip_address
 
-    def connect_motor_ip(self, ip):
+    def connect_motor_ip(self, text):
         global cpu_frequency
-        # Add an action for entering a custom IP address
-        if ip == "Enter custom IP":
-            self.prompt_for_custom_ip()
-            return
+        ip = None
+        if is_ip_address(text):
+            ip = text
+        else:
+            if text in self.joint_to_ip_map.keys():
+                ip = self.joint_to_ip_map[text]
+                print(ip)
+            else:
+                raise RuntimeError(f"IP address for {text} is not defined")
+
 
         print("Connecting motor " + ip)
         self.ip_address = ip
