@@ -1029,6 +1029,8 @@ class BringupTab(MotorTab):
         new_lines = []
         serial_number_to_match = current_motor().serial_number()
         line_added = False
+        joint_name = self.joint_name_dropdown.currentText()
+
         with open(self.robot_package, 'r') as file:
             for line in file:
                 if f"{serial_number_to_match}" in line or f"{joint_name}" in line:
