@@ -1031,8 +1031,8 @@ class BringupTab(MotorTab):
         line_added = False
         with open(self.robot_package, 'r') as file:
             for line in file:
-                if f"{serial_number_to_match}" in line:
-                    # If a line with this SN exists replace the line with the new setup for that SN
+                if f"{serial_number_to_match}" in line or f"{joint_name}" in line:
+                    # If a line with this SN or joint name exists replace the line with the new setup for that SN
                     new_lines.append(f'  - [{self.package_info}]\n')
                     line_added = True
                 else:
@@ -1064,7 +1064,7 @@ class BringupTab(MotorTab):
                         "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
         
         # Create the file with the name given by the user
-        self.dest_file = self.robot_directory + "/" + f"{joint_name}_{motor_sn}" + ".json"
+        self.dest_file = self.robot_directory + "/" + f"{joint_name}" + ".json"
 
         print(f"Creating a new configuration file at {self.dest_file}")
         with open(self.dest_file, "w") as file:
