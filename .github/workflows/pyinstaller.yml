@@ -36,7 +36,9 @@ jobs:
     - name: build with pyinstaller
       run: |
         export PYTHONPATH=/usr/share/motor-realtime/
-        pyinstaller --hidden-import=PyQt5.sip motor_gui.py
+        echo ${{ github.run_number }} > buildnum
+        cat buildnum
+        pyinstaller --hidden-import=PyQt5.sip --add-data="buildnum:." motor_gui.py
         zip -r dist.zip dist/
     - name: Archive production artifacts
       uses: actions/upload-artifact@main

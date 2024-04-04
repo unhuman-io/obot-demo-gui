@@ -1383,8 +1383,18 @@ class MainWindow(QMainWindow):
         if "-simulated" in QCoreApplication.arguments():
             self.simulated = True
             motors = motor_manager.get_motors_by_name(["sim1", "sim2"], connect=False, allow_simulated = True)
-        else:
-            motors = motor_manager.get_connected_motors(connect=False)
+        elif "-version" in QCoreApplication.arguments():
+            try:
+                # _MEIPASS from pyinstaller
+                with open(sys._MEIPASS + "/buildnum") as f:
+                    print("version: ", end="")
+                    for line in f:
+                        print(line)
+            except:
+                print("version: local version")
+            sys.exit(0)
+
+            
         if len(motors) == 0:
             motors = motor_manager.get_motors_by_name(["sim1"], connect=False, allow_simulated = True)
             self.simulated = True
