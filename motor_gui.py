@@ -1035,7 +1035,7 @@ class BringupTab(MotorTab):
             for line in file:
                 if f"{serial_number_to_match}" in line or f"{joint_name}" in line:
                     # If a line with this SN or joint name exists replace the line with the new setup for that SN
-                    new_lines.append(f'  - [{self.package_info}]\n')
+                    new_lines.append(f' - [{self.package_info}]\n')
                     line_added = True
                 else:
                     new_lines.append(line)
