@@ -2127,6 +2127,8 @@ class StepperTab(MotorTab):
 
         status = current_motor()["fast_loop_status"].get()
         data = np.genfromtxt(StringIO(status), delimiter=",")
+        data = data.copy()
+        data.resize(10)
         motor_pos = data[1]
         iq_des = data[2]
         iq_meas = data[3]
