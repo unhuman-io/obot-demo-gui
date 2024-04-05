@@ -1379,7 +1379,7 @@ class MainWindow(QMainWindow):
         global motor_manager
         motor_manager = motor.MotorManager()
         self.simulated = False
-        motors = None
+        motors = motor_manager.get_connected_motors(connect=False)
         if "-simulated" in QCoreApplication.arguments():
             self.simulated = True
             motors = motor_manager.get_motors_by_name(["sim1", "sim2"], connect=False, allow_simulated = True)
@@ -1449,7 +1449,11 @@ class MainWindow(QMainWindow):
             self.motor_ip_menu.addAction(ip)
         self.motor_ip_menu.triggered.connect(lambda action: self.handle_menu_action(action.text()))
 
-        self.connect_motor(motors[0].name())
+        if "-i" in QCoreApplication.arguments():
+            self.ip_address = QCoreApplication.arguments()[QCoreApplication.arguments().index("-i") + 1]
+            self.connect_motor_ip(self.ip_address)
+        else:
+            self.connect_motor(motors[0].name())
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
