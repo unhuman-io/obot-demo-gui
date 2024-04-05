@@ -22,7 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@main
       with:
-        fetch-depth: 1
+        fetch-depth: 0
     - name: install dependencies
       run: |
         apt-get update
@@ -36,7 +36,9 @@ jobs:
     - name: build with pyinstaller
       run: |
         export PYTHONPATH=/usr/share/motor-realtime/
-        echo ${{ github.run_number }} > buildnum
+        echo -n ${{ github.run_number }} > buildnum
+        echo -n " " >> buildnum
+        echo -n ${{ github.sha }} >> buildnum
         cat buildnum
         pyinstaller --hidden-import=PyQt5.sip --add-data="buildnum:." motor_gui.py
         zip -r dist.zip dist/
