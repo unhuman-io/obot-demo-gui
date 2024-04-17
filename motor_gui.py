@@ -1379,12 +1379,22 @@ class MainWindow(QMainWindow):
         global motor_manager
         motor_manager = motor.MotorManager()
         self.simulated = False
-        motors = None
+        motors = motor_manager.get_connected_motors(connect=False)
         if "-simulated" in QCoreApplication.arguments():
             self.simulated = True
             motors = motor_manager.get_motors_by_name(["sim1", "sim2"], connect=False, allow_simulated = True)
-        else:
-            motors = motor_manager.get_connected_motors(connect=False)
+        elif "-version" in QCoreApplication.arguments():
+            try:
+                # _MEIPASS from pyinstaller
+                with open(sys._MEIPASS + "/buildnum") as f:
+                    print("version: ", end="")
+                    for line in f:
+                        print(line)
+            except:
+                print("version: local version")
+            sys.exit(0)
+
+            
         if len(motors) == 0:
             motors = motor_manager.get_motors_by_name(["sim1"], connect=False, allow_simulated = True)
             self.simulated = True
@@ -1439,7 +1449,11 @@ class MainWindow(QMainWindow):
             self.motor_ip_menu.addAction(ip)
         self.motor_ip_menu.triggered.connect(lambda action: self.handle_menu_action(action.text()))
 
-        self.connect_motor(motors[0].name())
+        if "-i" in QCoreApplication.arguments():
+            self.ip_address = QCoreApplication.arguments()[QCoreApplication.arguments().index("-i") + 1]
+            self.connect_motor_ip(self.ip_address)
+        else:
+            self.connect_motor(motors[0].name())
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -2127,6 +2141,8 @@ class StepperTab(MotorTab):
 
         status = current_motor()["fast_loop_status"].get()
         data = np.genfromtxt(StringIO(status), delimiter=",")
+        data = data.copy()
+        data.resize(10)
         motor_pos = data[1]
         iq_des = data[2]
         iq_meas = data[3]
