@@ -59,6 +59,7 @@ import time
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+session = boto3.Session()
 motor_manager = None
 
 # Read the environment variables to get the path to project-x
@@ -73,6 +74,22 @@ def current_motor():
     return motor_manager.motors()[0]
 
 cpu_frequency = 170e6
+
+def get_torque_cell_list():
+    s3 = S3Server("figure-robot-configs")
+    paginator = s3.s3session.meta.client.get_paginator("list_objects_v2")
+
+    tc_files = []
+
+    # Paginate through objects in the bucket
+    for page in paginator.paginate(Bucket="figure-robot-configs", Prefix="torque_cell_calibration_files"):
+        if "Contents" in page:
+            for obj in page["Contents"]:
+                # Extract the filename
+                filename = os.path.basename(obj["Key"])
+                tc_files.append(filename)
+
+    return tc_files
 
 def mode_open():
     print("open")
@@ -833,12 +850,13 @@ class BringupTab(MotorTab):
         select_tcell_layout = QHBoxLayout()
 
         # self.tcell_label = QLabel('Torque Cell Config: ', self)
-        self.set_tcell = QLineEdit()
+        self.tcell_combobox = QComboBox()
+        self.tcell_combobox.addItems(get_torque_cell_list())
         # self.set_tcell.editingFinished.connect(self.select_tcell)
         # select_tcell_layout.addWidget(self.tcell_label)
         self.link_tcell_btn = QPushButton("Link Torque Cell to Motor")
         self.link_tcell_btn.clicked.connect(self.select_tcell)
-        select_tcell_layout.addWidget(self.set_tcell)
+        select_tcell_layout.addWidget(self.tcell_combobox)
         select_tcell_layout.addWidget(self.link_tcell_btn)
 
         layout.addLayout(select_tcell_layout)
@@ -989,7 +1007,8 @@ class BringupTab(MotorTab):
     def select_tcell(self) -> None:
         # Check if the file is on AWS
         self.s3_server = S3Server("figure-robot-configs")
-        self.tcell_file = self.set_tcell.text()
+        self.tcell_file = self.tcell_combobox.currentText()
+        print(f"Selected torque cell file: {self.tcell_file}")
         motor_sn = current_motor().serial_number()
         utils.link_torque_cell_to_motor(self.s3_server, f"torque_cell_calibration_files/{motor_sn}_*", self.tcell_file)
 
