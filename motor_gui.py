@@ -75,11 +75,14 @@ def current_motor():
 
 cpu_frequency = 170e6
 
-def get_torque_cell_list():
+def get_torque_cell_list(self):
+    if len(self.tc_files) > 0:
+        return self.tc_files
+
     s3 = S3Server("figure-robot-configs")
     paginator = s3.s3session.meta.client.get_paginator("list_objects_v2")
 
-    tc_files = []
+    self.tc_files = []
 
     # Paginate through objects in the bucket
     for page in paginator.paginate(Bucket="figure-robot-configs", Prefix="torque_cell_calibration_files"):
@@ -87,9 +90,9 @@ def get_torque_cell_list():
             for obj in page["Contents"]:
                 # Extract the filename
                 filename = os.path.basename(obj["Key"])
-                tc_files.append(filename)
+                self.tc_files.append(filename)
 
-    return tc_files
+    return self.tc_files
 
 def mode_open():
     print("open")
