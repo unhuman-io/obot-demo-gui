@@ -1013,7 +1013,7 @@ class BringupTab(MotorTab):
         self.tcell_file = self.tcell_combobox.currentText()
         print(f"Selected torque cell file: {self.tcell_file}")
         motor_sn = current_motor().serial_number()
-        utils.link_torque_cell_to_motor(self.s3_server, f"torque_cell_calibration_files/{motor_sn}_*", self.tcell_file)
+        utils.link_torque_cell_to_motor(self.s3_server, f"motor_calibration_files/{motor_sn}_*", self.tcell_file)
 
     # def select_tcell(self) -> None:
     #     # Open a file dialog to select files for upload
@@ -1095,12 +1095,10 @@ class BringupTab(MotorTab):
 
         if not os.path.exists(motor_driver_sn_file):
             print(f"Cannot find {motor_driver_sn_file} so we're not including it")
-            dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
-                        "inherits1": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
+            dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}"}
         else:
             dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
-                        "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
-                        "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
+                        "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}"}
         
         # Create the file with the name given by the user
         self.dest_file = self.robot_directory + "/" + f"{joint_name}" + ".json"
