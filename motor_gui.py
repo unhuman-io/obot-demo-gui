@@ -76,7 +76,7 @@ def current_motor():
 cpu_frequency = 170e6
 
 tc_files = []
-def get_torque_cell_list(self):
+def get_torque_cell_list():
     if len(tc_files) > 0:
         return tc_files
 
