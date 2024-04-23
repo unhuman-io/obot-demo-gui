@@ -59,6 +59,7 @@ import time
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+session = boto3.Session()
 motor_manager = None
 
 # Read the environment variables to get the path to project-x
@@ -66,11 +67,31 @@ project_path = os.getenv('PROJECT_PATH')
 if project_path is not None:
     sys.path.append(project_path + "/tools/calibration")
     from motor_handler import MotorHandler
+    from aws_server import S3Server
+    import utils
 
 def current_motor():
     return motor_manager.motors()[0]
 
 cpu_frequency = 170e6
+
+tc_files = []
+def get_torque_cell_list():
+    if len(tc_files) > 0:
+        return tc_files
+
+    s3 = S3Server("figure-robot-configs")
+    paginator = s3.s3session.meta.client.get_paginator("list_objects_v2")
+
+    # Paginate through objects in the bucket
+    for page in paginator.paginate(Bucket="figure-robot-configs", Prefix="torque_cell_calibration_files"):
+        if "Contents" in page:
+            for obj in page["Contents"]:
+                # Extract the filename
+                filename = os.path.basename(obj["Key"])
+                tc_files.append(filename)
+
+    return tc_files
 
 def mode_open():
     print("open")
@@ -794,6 +815,7 @@ class BringupTab(MotorTab):
         # Create the dropdowns
         self.platform_type_dropdown = QComboBox(self)
         self.joint_name_dropdown = QComboBox(self)
+
         self.torque_cell_type_dropdown = QComboBox(self)
         self.result_label = QLabel('Firmware Config: ', self)
 
@@ -828,11 +850,17 @@ class BringupTab(MotorTab):
         layout.addWidget(self.result_label)
 
         select_tcell_layout = QHBoxLayout()
-        self.set_tcell_btn = QPushButton("Select Torque Cell Config")
-        self.set_tcell_btn.clicked.connect(self.select_tcell)
-        self.tcell_label = QLabel('Torque Cell Config: ', self)
-        select_tcell_layout.addWidget(self.set_tcell_btn)
-        select_tcell_layout.addWidget(self.tcell_label)
+
+        # self.tcell_label = QLabel('Torque Cell Config: ', self)
+        self.tcell_combobox = QComboBox()
+        self.tcell_combobox.addItems(get_torque_cell_list())
+        # self.set_tcell.editingFinished.connect(self.select_tcell)
+        # select_tcell_layout.addWidget(self.tcell_label)
+        self.link_tcell_btn = QPushButton("Link Torque Cell to Motor")
+        self.link_tcell_btn.clicked.connect(self.select_tcell)
+        select_tcell_layout.addWidget(self.tcell_combobox)
+        select_tcell_layout.addWidget(self.link_tcell_btn)
+
         layout.addLayout(select_tcell_layout)
 
         self.compile_opts_combo_box = QComboBox()
@@ -979,28 +1007,36 @@ class BringupTab(MotorTab):
                 return
 
     def select_tcell(self) -> None:
-        # Open a file dialog to select files for upload
-        tcell_directory_map = { "figure": "figure_gen1_torque_cell_parameters",
-                                "nmb": "nmb_a_torque_cell_parameters",
-                                "futek": "futek"}
-        selected_tcell_type = self.torque_cell_type_dropdown.currentText()
-        selected_platform = self.torque_cell_type_dropdown.currentText()
+        # Check if the file is on AWS
+        self.s3_server = S3Server("figure-robot-configs")
+        self.tcell_file = self.tcell_combobox.currentText()
+        print(f"Selected torque cell file: {self.tcell_file}")
+        motor_sn = current_motor().serial_number()
+        utils.link_torque_cell_to_motor(self.s3_server, f"motor_calibration_files/{motor_sn}_*", self.tcell_file)
 
-        platform_type = self.platform_type_dropdown.currentText()
+    # def select_tcell(self) -> None:
+    #     # Open a file dialog to select files for upload
+    #     tcell_directory_map = { "figure": "figure_gen1_torque_cell_parameters",
+    #                             "nmb": "nmb_a_torque_cell_parameters",
+    #                             "futek": "futek"}
+    #     selected_tcell_type = self.torque_cell_type_dropdown.currentText()
+    #     selected_platform = self.torque_cell_type_dropdown.currentText()
 
-        tcell_directory_name = tcell_directory_map[selected_tcell_type]
-        if platform_type == "b_test":
-            tcell_directory_path = f"{project_path}/tools/obot/b_sample_test/b_torque_cell_calibration"
-        elif platform_type == "f100_spi_ld" or platform_type == "f100_spi" or platform_type == "f50_uart":
-            tcell_directory_path = f"{project_path}/tools/obot/b_sample/b_torque_cell_calibration/"            
-        else:
-            tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
+    #     platform_type = self.platform_type_dropdown.currentText()
 
-        file_dialog = QFileDialog(self)
-        file_dialog.setDirectory(tcell_directory_path)  # Set the current directory
-        self.tcell_config, _ = file_dialog.getOpenFileName(self, "Open File", "")
-        print(f"Setting torque cell config to: {self.tcell_config}")
-        self.tcell_label.setText(f'Torque Cell Config: { self.tcell_config}')
+    #     tcell_directory_name = tcell_directory_map[selected_tcell_type]
+    #     if platform_type == "b_test":
+    #         tcell_directory_path = f"{project_path}/tools/obot/b_sample_test/b_torque_cell_calibration"
+    #     elif platform_type == "f100_spi_ld" or platform_type == "f100_spi" or platform_type == "f50_uart":
+    #         tcell_directory_path = f"{project_path}/tools/obot/b_sample/b_torque_cell_calibration/"            
+    #     else:
+    #         tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
+
+    #     file_dialog = QFileDialog(self)
+    #     file_dialog.setDirectory(tcell_directory_path)  # Set the current directory
+    #     self.tcell_config, _ = file_dialog.getOpenFileName(self, "Open File", "")
+    #     print(f"Setting torque cell config to: {self.tcell_config}")
+    #     self.tcell_label.setText(f'Torque Cell Config: { self.tcell_config}')
 
     def create_file_update_yaml(self):
         package_file_dialog = QFileDialog(self)
@@ -1058,12 +1094,10 @@ class BringupTab(MotorTab):
 
         if not os.path.exists(motor_driver_sn_file):
             print(f"Cannot find {motor_driver_sn_file} so we're not including it")
-            dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
-                        "inherits1": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
+            dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}"}
         else:
             dictionary = {"inherits0": f"{os.path.relpath(self.base_config_path, self.robot_directory)}",
-                        "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}",
-                        "inherits2": f"{os.path.relpath(self.tcell_config, self.robot_directory)}"}
+                        "inherits1": f"{os.path.relpath(motor_driver_sn_file, self.robot_directory)}"}
         
         # Create the file with the name given by the user
         self.dest_file = self.robot_directory + "/" + f"{joint_name}" + ".json"
