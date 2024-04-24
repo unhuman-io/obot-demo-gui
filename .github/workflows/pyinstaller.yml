@@ -46,7 +46,7 @@ jobs:
       uses: actions/upload-artifact@main
       with:
         name: dist
-        path: dist
+        path: dist.zip
     - uses: pyTooling/Actions/releaser@main
       if: contains(github.ref, 'main')
       with:
