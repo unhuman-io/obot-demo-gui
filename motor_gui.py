@@ -63,7 +63,7 @@ session = boto3.Session()
 motor_manager = None
 
 # Read the environment variables to get the path to project-x
-project_path = os.getenv('PROJECT_PATH')  
+project_path = os.getenv('PROJECT_PATH')
 if project_path is not None:
     sys.path.append(project_path + "/tools/calibration")
     from motor_handler import MotorHandler
@@ -74,24 +74,6 @@ def current_motor():
     return motor_manager.motors()[0]
 
 cpu_frequency = 170e6
-
-tc_files = []
-def get_torque_cell_list():
-    if len(tc_files) > 0:
-        return tc_files
-
-    s3 = S3Server("figure-robot-configs")
-    paginator = s3.s3session.meta.client.get_paginator("list_objects_v2")
-
-    # Paginate through objects in the bucket
-    for page in paginator.paginate(Bucket="figure-robot-configs", Prefix="torque_cell_calibration_files"):
-        if "Contents" in page:
-            for obj in page["Contents"]:
-                # Extract the filename
-                filename = os.path.basename(obj["Key"])
-                tc_files.append(filename)
-
-    return tc_files
 
 def mode_open():
     print("open")
@@ -793,6 +775,7 @@ class BringupTab(MotorTab):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
+        self.tc_files = []
 
         self.all_a_joints = ["left_ankle_x", "left_ankle_y", "left_shoulder_j1", "left_shoulder_j2", "left_elbow", "left_forearm_twist", 
                       "left_upper_arm_twist", "left_wrist_pitch", "left_wrist_yaw", "left_hip_x", "left_hip_y", "left_hip_z", 
@@ -853,7 +836,8 @@ class BringupTab(MotorTab):
 
         # self.tcell_label = QLabel('Torque Cell Config: ', self)
         self.tcell_combobox = QComboBox()
-        self.tcell_combobox.addItems(get_torque_cell_list())
+        tcells = self.get_torque_cell_list()
+        self.tcell_combobox.addItems(tcells)
         # self.set_tcell.editingFinished.connect(self.select_tcell)
         # select_tcell_layout.addWidget(self.tcell_label)
         self.link_tcell_btn = QPushButton("Link Torque Cell to Motor")
@@ -890,6 +874,26 @@ class BringupTab(MotorTab):
 
         self.setLayout(layout)
 
+    def get_torque_cell_list(self):
+        if len(self.tc_files) > 0:
+            return self.tc_files
+        if project_path is not None:
+            s3 = S3Server("figure-robot-configs")
+            paginator = s3.s3session.meta.client.get_paginator("list_objects_v2")
+
+            # Paginate through objects in the bucket
+            for page in paginator.paginate(Bucket="figure-robot-configs", Prefix="torque_cell_calibration_files"):
+                if "Contents" in page:
+                    for obj in page["Contents"]:
+                        # Extract the filename
+                        filename = os.path.basename(obj["Key"])
+                        self.tc_files.append(filename)
+
+            return self.tc_files
+        else:
+            print("Please export PROJECT_PATH variable")
+            return []
+
     def update_joint_and_tcell_dropdowns(self):
         # Clear the current items in the dropdown
         self.joint_name_dropdown.clear()
@@ -904,7 +908,7 @@ class BringupTab(MotorTab):
             self.joint_name_dropdown.addItems(self.all_a_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure", "futek", "nmb"])
-        elif platform_type == 'b_test' or platform_type == "f100_spi":
+        elif platform_type == 'b_test' or platform_type == "f100_spi" or platform_type == "f100_spi_ld":
             self.joint_name_dropdown.addItems(self.all_b_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure"])
@@ -1008,35 +1012,12 @@ class BringupTab(MotorTab):
 
     def select_tcell(self) -> None:
         # Check if the file is on AWS
-        self.s3_server = S3Server("figure-robot-configs")
-        self.tcell_file = self.tcell_combobox.currentText()
-        print(f"Selected torque cell file: {self.tcell_file}")
-        motor_sn = current_motor().serial_number()
-        utils.link_torque_cell_to_motor(self.s3_server, f"motor_calibration_files/{motor_sn}_*", self.tcell_file)
-
-    # def select_tcell(self) -> None:
-    #     # Open a file dialog to select files for upload
-    #     tcell_directory_map = { "figure": "figure_gen1_torque_cell_parameters",
-    #                             "nmb": "nmb_a_torque_cell_parameters",
-    #                             "futek": "futek"}
-    #     selected_tcell_type = self.torque_cell_type_dropdown.currentText()
-    #     selected_platform = self.torque_cell_type_dropdown.currentText()
-
-    #     platform_type = self.platform_type_dropdown.currentText()
-
-    #     tcell_directory_name = tcell_directory_map[selected_tcell_type]
-    #     if platform_type == "b_test":
-    #         tcell_directory_path = f"{project_path}/tools/obot/b_sample_test/b_torque_cell_calibration"
-    #     elif platform_type == "f100_spi_ld" or platform_type == "f100_spi" or platform_type == "f50_uart":
-    #         tcell_directory_path = f"{project_path}/tools/obot/b_sample/b_torque_cell_calibration/"            
-    #     else:
-    #         tcell_directory_path = f"{project_path}/tools/obot/a_sample/{tcell_directory_name}"
-
-    #     file_dialog = QFileDialog(self)
-    #     file_dialog.setDirectory(tcell_directory_path)  # Set the current directory
-    #     self.tcell_config, _ = file_dialog.getOpenFileName(self, "Open File", "")
-    #     print(f"Setting torque cell config to: {self.tcell_config}")
-    #     self.tcell_label.setText(f'Torque Cell Config: { self.tcell_config}')
+        if project_path is not None:
+            self.s3_server = S3Server("figure-robot-configs")
+            self.tcell_file = self.tcell_combobox.currentText()
+            print(f"Selected torque cell file: {self.tcell_file}")
+            motor_sn = current_motor().serial_number()
+            utils.link_torque_cell_to_motor(self.s3_server, f"motor_calibration_files/{motor_sn}_*", self.tcell_file)
 
     def create_file_update_yaml(self):
         package_file_dialog = QFileDialog(self)
