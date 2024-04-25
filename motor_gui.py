@@ -908,7 +908,7 @@ class BringupTab(MotorTab):
             self.joint_name_dropdown.addItems(self.all_a_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure", "futek", "nmb"])
-        elif platform_type == 'b_test' or platform_type == "f100_spi" or platform_type == "f100_spi_ld":
+        elif platform_type == 'b_test' or platform_type == "f100_spi" or platform_type == "f100_spi_ld"  or platform_type == "f50_uart":
             self.joint_name_dropdown.addItems(self.all_b_joints)
             self.torque_cell_type_dropdown.clear()
             self.torque_cell_type_dropdown.addItems(["figure"])
