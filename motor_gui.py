@@ -82,7 +82,7 @@ def mode_open():
 
 def is_ip_address(s):
     # Define the regex pattern for an IP address or IP-like string with 'X' as a placeholder
-    pattern = r'^(\d{1,3}\.){3}(\d{1,3}|X)$'
+    pattern = r'^(\d{1,3}\.){3}(\d{1,3}|X)(:\d{1,6})?$'
     
     # Use re.match to check if the string matches the pattern
     if re.match(pattern, s):
@@ -1438,9 +1438,9 @@ class MainWindow(QMainWindow):
             "left_shoulder_j2": "192.168.50.31",
             "left_upper_arm_twist": "192.168.50.32",
             "left_elbow": "192.168.50.33",
-            "left_forearm_twist": "192.168.50.34",
-            "left_wrist_pitch": "192.168.50.34",
-            "left_wrist_yaw": "192.168.50.34",
+            "left_wrist_roll": "192.168.50.34:7771",
+            "left_wrist_pitch": "192.168.50.34:7772",
+            "left_wrist_yaw": "192.168.50.34:7770",
             "right_hip_y": "192.168.50.40",
             "right_hip_x": "192.168.50.41",
             "right_hip_z": "192.168.50.42",
@@ -1451,9 +1451,9 @@ class MainWindow(QMainWindow):
             "right_shoulder_j2": "192.168.50.21",
             "right_upper_arm_twist": "192.168.50.22",
             "right_elbow": "192.168.50.23",
-            "right_forearm_twist": "192.168.50.24",
-            "right_wrist_pitch": "192.168.50.24",
-            "right_wrist_yaw": "192.168.50.24",
+            "right_wrist_roll": "192.168.50.24:7771",
+            "right_wrist_pitch": "192.168.50.24:7772",
+            "right_wrist_yaw": "192.168.50.24:7770",
             "spine_z": "192.168.50.50",
             "spine_x": "192.168.50.51",
         }
