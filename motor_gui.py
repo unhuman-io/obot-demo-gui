@@ -832,21 +832,6 @@ class BringupTab(MotorTab):
         layout.addLayout(select_params_layout)
         layout.addWidget(self.result_label)
 
-        select_tcell_layout = QHBoxLayout()
-
-        # self.tcell_label = QLabel('Torque Cell Config: ', self)
-        self.tcell_combobox = QComboBox()
-        tcells = self.get_torque_cell_list()
-        self.tcell_combobox.addItems(tcells)
-        # self.set_tcell.editingFinished.connect(self.select_tcell)
-        # select_tcell_layout.addWidget(self.tcell_label)
-        self.link_tcell_btn = QPushButton("Link Torque Cell to Motor")
-        self.link_tcell_btn.clicked.connect(self.select_tcell)
-        select_tcell_layout.addWidget(self.tcell_combobox)
-        select_tcell_layout.addWidget(self.link_tcell_btn)
-
-        layout.addLayout(select_tcell_layout)
-
         self.compile_opts_combo_box = QComboBox()
         compile_opts = ["", "-DBROKEN_MAX31875"]
         self.compile_opts_combo_box.addItems(compile_opts)
@@ -1010,16 +995,37 @@ class BringupTab(MotorTab):
                 QMessageBox.critical(self, "Error", f"Failed to apply stashed changes: {e}")
                 return
 
-    def select_tcell(self) -> None:
-        # Check if the file is on AWS
-        if project_path is not None:
-            self.s3_server = S3Server("figure-robot-configs")
-            self.tcell_file = self.tcell_combobox.currentText()
-            print(f"Selected torque cell file: {self.tcell_file}")
-            motor_sn = current_motor().serial_number()
-            utils.link_torque_cell_to_motor(self.s3_server, f"motor_calibration_files/{motor_sn}_*", self.tcell_file)
-
     def create_file_update_yaml(self):
+        self.joint_to_type = {
+            "left_hip_y": "hd25",
+            "left_hip_x": "hd20",
+            "left_hip_z": "hd20",
+            "left_knee": "hd25",
+            "left_ankle_y": "ld",
+            "left_ankle_x": "hd14",
+            "right_shoulder_j1": "hd17",
+            "right_shoulder_j2": "hd17",
+            "right_upper_arm_twist": "hd17",
+            "right_elbow": "hd17",
+            "right_forearm": "hd11",
+            "left_shoulder_j1": "hd17",
+            "left_shoulder_j2": "hd17",
+            "left_upper_arm_twist": "hd17",
+            "left_elbow": "hd17",
+            "left_forearm": "hd11",
+            "right_hip_y": "hd25",
+            "right_hip_x": "hd20",
+            "right_hip_z": "hd20",
+            "right_knee": "hd25",
+            "right_ankle_y": "ld",
+            "right_ankle_x": "hd14",
+            "spine_z": "hd20",
+            "spine_x": "hd20",
+            "neck_no": "hd11",
+            "neck_yes": "hd11",
+        }
+
+
         package_file_dialog = QFileDialog(self)
         package_file_dialog.setDirectory(f"{project_path}/tools/obot")
         package_file_dialog.setFileMode(QFileDialog.ExistingFile)
@@ -1028,6 +1034,16 @@ class BringupTab(MotorTab):
         self.robot_package, _ = package_file_dialog.getOpenFileName(self, "Open File", "")
         self.robot_directory = os.path.dirname(self.robot_package)
         
+        # use generic tcell gain
+        self.s3_server = S3Server("figure-robot-configs")
+        joint_name = self.joint_name_dropdown.currentText()
+
+        self.tcell_file = f"{self.joint_to_type[joint_name]}-generic.json"
+        print(f"Using torque cell file: {self.tcell_file}")
+
+        motor_sn = current_motor().serial_number()
+        utils.link_torque_cell_to_motor(self.s3_server, f"motor_calibration_files/{motor_sn}_*", self.tcell_file)
+
         # Create a new JSON file for this actuator and save it in the robot directory
         self.create_file_and_save()
 
@@ -1432,8 +1448,8 @@ class MainWindow(QMainWindow):
             "left_hip_x": "192.168.50.11",
             "left_hip_z": "192.168.50.12",
             "left_knee": "192.168.50.13",
-            "left_ankle_y": "192.168.50.14",
-            "left_ankle_x": "192.168.50.15",
+            "left_ankle_y": "hd14",
+            "left_ankle_x": "hd14",
             "left_shoulder_j1": "192.168.50.30",
             "left_shoulder_j2": "192.168.50.31",
             "left_upper_arm_twist": "192.168.50.32",
