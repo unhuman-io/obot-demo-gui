@@ -782,10 +782,10 @@ class BringupTab(MotorTab):
                       "left_knee", "right_ankle_x", "right_ankle_y", "right_shoulder_j1", "right_shoulder_j2", "right_elbow", 
                       "right_forearm_twist", "right_upper_arm_twist", "right_wrist_pitch", "right_wrist_yaw", "right_hip_x", 
                       "right_hip_y", "right_hip_z", "right_knee", "spine_xy_left", "spine_xy_right", "spine_z"]
-        self.all_b_joints = ["left_ankle_x", "left_ankle_y", "left_shoulder_j1", "left_shoulder_j2", "left_elbow", "left_forearm_twist", 
+        self.all_b_joints = ["left_ankle_x", "left_ankle_y", "left_shoulder_j1", "left_shoulder_j2", "left_elbow", "left_wrist_roll", 
                       "left_upper_arm_twist", "left_wrist_pitch", "left_wrist_yaw", "left_hip_x", "left_hip_y", "left_hip_z", 
                       "left_knee", "right_ankle_x", "right_ankle_y", "right_shoulder_j1", "right_shoulder_j2", "right_elbow", 
-                      "right_forearm_twist", "right_upper_arm_twist", "right_wrist_pitch", "right_wrist_yaw", "right_hip_x", 
+                      "right_wrist_roll", "right_upper_arm_twist", "right_wrist_pitch", "right_wrist_yaw", "right_hip_x", 
                       "right_hip_y", "right_hip_z", "right_knee", "spine_x", "spine_z"]
         self.all_fingers = [
             'left_index_finger', 'left_middle_finger', 'left_ring_finger', 'left_pinky_finger',
@@ -1007,12 +1007,10 @@ class BringupTab(MotorTab):
             "right_shoulder_j2": "hd17",
             "right_upper_arm_twist": "hd17",
             "right_elbow": "hd17",
-            "right_forearm": "hd11",
             "left_shoulder_j1": "hd17",
             "left_shoulder_j2": "hd17",
             "left_upper_arm_twist": "hd17",
             "left_elbow": "hd17",
-            "left_forearm": "hd11",
             "right_hip_y": "hd25",
             "right_hip_x": "hd20",
             "right_hip_z": "hd20",
@@ -1023,6 +1021,12 @@ class BringupTab(MotorTab):
             "spine_x": "hd20",
             "neck_no": "hd11",
             "neck_yes": "hd11",
+            "right_wrist_roll": "hd11",
+            "right_wrist_pitch": "hd11",
+            "right_wrist_yaw": "hd11",
+            "left_wrist_roll": "hd11",
+            "left_wrist_pitch": "hd11",
+            "left_wrist_yaw": "hd11",
         }
 
 
