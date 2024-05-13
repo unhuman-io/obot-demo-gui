@@ -839,7 +839,7 @@ class BringupTab(MotorTab):
         layout.addLayout(select_params_layout)
 
         buttons_layout = QHBoxLayout()
-        self.create_and_save_btn = QPushButton("Create File and Save To Yaml Package")
+        self.create_and_save_btn = QPushButton("Store TC & Init AWS")
         self.create_and_save_btn.clicked.connect(self.create_file_update_yaml)
         buttons_layout.addWidget(self.create_and_save_btn)
 
@@ -1028,15 +1028,6 @@ class BringupTab(MotorTab):
             "left_wrist_pitch": "hd11",
             "left_wrist_yaw": "hd11",
         }
-
-
-        package_file_dialog = QFileDialog(self)
-        package_file_dialog.setDirectory(f"{project_path}/tools/obot")
-        package_file_dialog.setFileMode(QFileDialog.ExistingFile)
-        
-        # The selected file is the YAML package - the parent directory is the destination for the new config file
-        self.robot_package, _ = package_file_dialog.getOpenFileName(self, "Open File", "")
-        self.robot_directory = os.path.dirname(self.robot_package)
         
         # use generic tcell gain
         self.s3_server = S3Server("figure-robot-configs")
@@ -1056,7 +1047,7 @@ class BringupTab(MotorTab):
         if(self.package_info is not None):
             try:
                 self.update_yaml_file()
-                QMessageBox.information(self, "Success", f"Data written to {self.robot_package}!")
+                QMessageBox.information(self, "Success", f" Data stored!")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
