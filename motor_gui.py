@@ -782,10 +782,10 @@ class BringupTab(MotorTab):
                       "left_knee", "right_ankle_x", "right_ankle_y", "right_shoulder_j1", "right_shoulder_j2", "right_elbow", 
                       "right_forearm_twist", "right_upper_arm_twist", "right_wrist_pitch", "right_wrist_yaw", "right_hip_x", 
                       "right_hip_y", "right_hip_z", "right_knee", "spine_xy_left", "spine_xy_right", "spine_z"]
-        self.all_b_joints = ["left_ankle_x", "left_ankle_y", "left_shoulder_j1", "left_shoulder_j2", "left_elbow", "left_forearm_twist", 
+        self.all_b_joints = ["left_ankle_x", "left_ankle_y", "left_shoulder_j1", "left_shoulder_j2", "left_elbow", "left_wrist_roll", 
                       "left_upper_arm_twist", "left_wrist_pitch", "left_wrist_yaw", "left_hip_x", "left_hip_y", "left_hip_z", 
                       "left_knee", "right_ankle_x", "right_ankle_y", "right_shoulder_j1", "right_shoulder_j2", "right_elbow", 
-                      "right_forearm_twist", "right_upper_arm_twist", "right_wrist_pitch", "right_wrist_yaw", "right_hip_x", 
+                      "right_wrist_roll", "right_upper_arm_twist", "right_wrist_pitch", "right_wrist_yaw", "right_hip_x", 
                       "right_hip_y", "right_hip_z", "right_knee", "spine_x", "spine_z"]
         self.all_fingers = [
             'left_index_finger', 'left_middle_finger', 'left_ring_finger', 'left_pinky_finger',
@@ -1023,6 +1023,12 @@ class BringupTab(MotorTab):
             "spine_x": "hd20",
             "neck_no": "hd11",
             "neck_yes": "hd11",
+            "right_wrist_roll": "hd11",
+            "right_wrist_pitch": "hd11",
+            "right_wrist_yaw": "hd11",
+            "left_wrist_roll": "hd11",
+            "left_wrist_pitch": "hd11",
+            "left_wrist_yaw": "hd11",
         }
 
 
@@ -1470,6 +1476,9 @@ class MainWindow(QMainWindow):
             "right_wrist_roll": "192.168.50.24:7771",
             "right_wrist_pitch": "192.168.50.24:7772",
             "right_wrist_yaw": "192.168.50.24:7770",
+            "left_wrist_roll": "192.168.50.34:7771",
+            "left_wrist_pitch": "192.168.50.34:7772",
+            "left_wrist_yaw": "192.168.50.34:7770",
             "spine_z": "192.168.50.50",
             "spine_x": "192.168.50.51",
         }
