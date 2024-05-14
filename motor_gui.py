@@ -1457,7 +1457,7 @@ class MainWindow(QMainWindow):
             "right_hip_z": "192.168.50.42",
             "right_knee": "192.168.50.43",
             "right_ankle_y": "192.168.50.44",
-            "right_ankle_x": "192.168.50.56",
+            "right_ankle_x": "192.168.50.45",
             "right_shoulder_j1": "192.168.50.20",
             "right_shoulder_j2": "192.168.50.21",
             "right_upper_arm_twist": "192.168.50.22",
