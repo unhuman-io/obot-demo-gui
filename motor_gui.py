@@ -1501,6 +1501,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(CurrentTuningTab(), "current tuning")
         self.tabs.addTab(PositionTuningTab(), "position tuning")
         self.tabs.addTab(StepperTab(), "stepper")
+        self.tabs.addTab(EncoderTab(), "encoder")
         self.tabs.addTab(BringupTab(self), "bringup")
 
         self.setCentralWidget(self.tabs)
@@ -1951,7 +1952,10 @@ class StreamingChart(QChartView):
             min1 = float("inf")
             max1 = float("-inf")
             for i in range(self.num_lines):
-                self.series[i].append(t, data[i])
+                if hasattr(t, "__iter__"):
+                    self.series[i].append(t[i], data[i])
+                else:
+                    self.series[i].append(t, data[i])
                 if len(self.series[i]) > self.length:
                     self.series[i].remove(0)
                 min1 = min(min1,min([d.y() for d in self.series[i].pointsVector()]))
@@ -2217,6 +2221,76 @@ class StepperTab(MotorTab):
             pass
         self.current_chart.removePoints()
         self.voltage_chart.removePoints()
+
+
+class EncoderTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(EncoderTab, self).__init__(*args, **kwargs)
+        self.update_time = 10
+
+        self.name = "encoder"
+    
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        layout1 = QHBoxLayout()
+
+        self.num_points = NumberEdit("Number of plot points")
+        self.num_points.signal.connect(self.num_points_update)
+        layout1.addWidget(self.num_points)
+
+        self.prefix = QLineEdit("m")
+        layout1.addWidget(self.prefix)
+
+        self.cpr = NumberEdit("cpr")
+        self.cpr.setNumber(2**24)
+        layout1.addWidget(self.cpr)
+
+        layout.addLayout(layout1)
+
+        self.error_chart = StreamingChart(2, QScatterSeries)
+        layout.addWidget(self.error_chart)
+
+        
+        self.num_points.setNumber(self.error_chart.length)
+
+        self.setLayout(layout)
+        self.mcu_timestamp = 0
+        self.t_seconds = 0
+        self.error_chart.series[0].setName("error")
+        self.error_chart.series[1].setName("warning")
+        self.error_chart.axis_y.setTitleText("error")
+        self.error_chart.series[0].setMarkerSize(5)
+        self.error_chart.series[1].setMarkerSize(5)
+
+
+
+    def update(self):
+        super(EncoderTab, self).update()
+        
+        dt = (motor.diff_mcu_time(self.status.mcu_timestamp, self.mcu_timestamp))/cpu_frequency
+        self.t_seconds += dt
+        self.mcu_timestamp = self.status.mcu_timestamp
+
+        prefix = self.prefix.text()
+        cpr = self.cpr.getNumber()
+        try:
+            error_pos = int(current_motor()[prefix + "last_error_pos"].get()) % cpr
+            warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % cpr
+        except ValueError:
+            error_pos = 0
+            warn_pos = 0
+
+        self.error_chart.update([error_pos, warn_pos], [1, 1])
+
+
+    def num_points_update(self, value):
+        try:
+            self.error_chart.length = int(value)
+        except ValueError:
+            pass
+        self.error_chart.removePoints()
+
 
 
 app = QApplication(sys.argv)
