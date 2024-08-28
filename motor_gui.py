@@ -1502,6 +1502,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(PositionTuningTab(), "position tuning")
         self.tabs.addTab(StepperTab(), "stepper")
         self.tabs.addTab(BringupTab(self), "bringup")
+        self.tabs.addTab(LimitsTab(self), "limits")
+        self.tabs.addTab(FlashCalTab(self), "flash cal")
 
         self.setCentralWidget(self.tabs)
         self.last_tab = self.tabs.currentWidget()
@@ -2217,6 +2219,65 @@ class StepperTab(MotorTab):
             pass
         self.current_chart.removePoints()
         self.voltage_chart.removePoints()
+
+class FlashCalTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(FlashCalTab, self).__init__(*args, **kwargs)
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.index_offset_measured = APIDisplay("index_offset_measured")
+        layout.addWidget(self.index_offset_measured)
+        self.electrical_zero_pos = APIEdit("electrical_zero_pos")
+        layout.addWidget(self.electrical_zero_pos)
+        self.output_bias = APIEdit("obias")
+        layout.addWidget(self.output_bias)
+        self.startup_motor_bias = APIEdit("startup_mbias")
+        layout.addWidget(self.startup_motor_bias)
+        self.tbias = APIEdit("tbias")
+        layout.addWidget(self.tbias)
+        self.tgain = APIEdit("tgain")
+        layout.addWidget(self.tgain)
+        self.flash_cal = QPushButton("Flash Cal")
+        layout.addWidget(self.flash_cal)
+        self.flash_cal.clicked.connect(self.flash_cal_update)
+        self.setLayout(layout)
+
+    def flash_cal_update(self):
+        print("Flash cal")
+        print(current_motor()["flash_cal"].get())
+
+
+class LimitsTab(MotorTab):
+    def __init__(self, *args, **kwargs):
+        super(LimitsTab, self).__init__(*args, **kwargs)
+
+        layout = QGridLayout()
+        self.motor_pos = NumberDisplay("motor position (rad)")
+        layout.addWidget(self.motor_pos, 0, 0)
+        self.output_pos = NumberDisplay("output position (rad)")
+        layout.addWidget(self.output_pos, 0, 1)
+
+        self.motor_hard_min = APIEdit("mlimit_min", "motor position hard min (rad)")
+        layout.addWidget(self.motor_hard_min, 1, 0)
+        self.motor_hard_max = APIEdit("mlimit_max", "motor position hard max (rad)")
+        layout.addWidget(self.motor_hard_max, 2, 0)
+        self.motor_soft_min = APIEdit("msoftlimit_min", "motor position soft min (rad)")
+        layout.addWidget(self.motor_soft_min, 3, 0)
+        self.motor_soft_max = APIEdit("msoftlimit_max", "motor position soft max (rad)")
+        layout.addWidget(self.motor_soft_max, 4, 0)
+        self.output_hard_min = APIEdit("olimit_min", "output position hard min (rad)")
+        layout.addWidget(self.output_hard_min, 1, 1)
+        self.output_hard_max = APIEdit("olimit_max", "output position hard max (rad)")
+        layout.addWidget(self.output_hard_max, 2, 1)
+
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.setLayout(layout)
+
+    def update(self):
+        super(LimitsTab, self).update()
+        self.motor_pos.setNumber(self.status.motor_position)
+        self.output_pos.setNumber(self.status.joint_position)
 
 
 app = QApplication(sys.argv)
