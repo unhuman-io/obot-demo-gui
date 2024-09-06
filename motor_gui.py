@@ -1974,6 +1974,40 @@ class StreamingChart(QChartView):
         for i in range(self.num_lines):
             self.series[i].removePoints(0,self.series[i].count())
 
+class StreamingChart2(StreamingChart):
+    def __init__(self, linetype=QLineSeries, *args, **kwargs):
+        super(StreamingChart2, self).__init__(num_lines=2, linetype=linetype, *args, **kwargs)
+        self.axis_y2 = QValueAxis()
+        self.axis_y2.setTickCount(10)        
+        self.chart.addAxis(self.axis_y2, Qt.AlignmentFlag.AlignRight)
+        self.series[1].detachAxis(self.axis_y)
+        self.series[1].attachAxis(self.axis_y2)
+        self.axis_y.setLinePenColor(self.series[0].color())
+        self.axis_y2.setLinePenColor(self.series[1].color())
+
+    def update(self, t, data):
+        try:
+            for i in range(2):
+                self.series[i].append(t, data[i])
+                if len(self.series[i]) > self.length:
+                    self.series[i].remove(0)
+                min1 = min([d.y() for d in self.series[i].pointsVector()])
+                max1 = max([d.y() for d in self.series[i].pointsVector()])
+
+                if self.update_limits:
+                    if i == 0:
+                        self.axis_y.setMin(min1)
+                        self.axis_y.setMax(max1)
+                    else:
+                        self.axis_y2.setMin(min1)
+                        self.axis_y2.setMax(max1)
+                    self.axis_x.setMax(max([d.x() for d in self.series[0].pointsVector()]))
+                    self.axis_x.setMin(min([d.x() for d in self.series[0].pointsVector()]))
+        except ValueError:
+            pass
+
+
+
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
         super(PositionTuningTab, self).__init__(*args, **kwargs)
@@ -2241,16 +2275,24 @@ class EncoderTab(MotorTab):
         self.num_points.signal.connect(self.num_points_update)
         layout1.addWidget(self.num_points)
 
-        self.prefix = QLineEdit("m1")
-        layout1.addWidget(self.prefix)
-
+        self.prefix = "m1"
+        self.prefix_edit = QLineEdit(self.prefix)
+        self.prefix_edit.textChanged.connect(self.update_prefix)
         self.raw = APIDisplay("raw")
+        self.disk_um = APIDisplay(self.prefix + "disk_um")
+        self.cpr_edit = NumberEdit("cpr")
+        self.cpr = 0
+        layout1.addWidget(self.disk_um)
+        self.update_prefix()
+        layout1.addWidget(self.prefix_edit)
+
+        
         layout1.addWidget(self.raw)
         self.update_list.append(self.raw)
 
-        self.cpr = NumberEdit("cpr")
-        self.cpr.setNumber(2**24)
-        layout1.addWidget(self.cpr)
+        
+        self.cpr_edit.signal.connect(self.update_cpr)
+        layout1.addWidget(self.cpr_edit)
 
         layout.addLayout(layout1)
 
@@ -2275,9 +2317,7 @@ class EncoderTab(MotorTab):
         self.error_chart.axis_x.setMax(2**24)
         self.error_chart.axis_x.setTitleText("Encoder position raw")
 
-        prefix = self.prefix.text()
-        cpr = self.cpr.getNumber()
-        self.last_error_pos = int(current_motor()[prefix + "last_error_pos"].get()) % cpr
+        self.last_error_pos = int(current_motor()[self.prefix + "last_error_pos"].get()) % self.cpr
         self.num_error = 0
         self.last_raw = 0
 
@@ -2291,25 +2331,63 @@ class EncoderTab(MotorTab):
         layout1.addWidget(self.clear_button)
 
 
-        self.chart2 = StreamingChart(1, QScatterSeries)
+        self.chart2 = StreamingChart2(QScatterSeries)
         self.chart2.series[0].setMarkerSize(5)
+        self.chart2.series[1].setMarkerSize(5)
         self.chart2.axis_x.setTitleText("Encoder position raw")
+        self.chart2.axis_y.setTitleText("ai_phases raw")
         self.chart2.series[0].setName("ai_phases")
+        self.chart2.series[1].setName("ai_scales")
+        self.chart2.axis_y2.setTitleText("ai_scales raw")
+
+        layout2 = QHBoxLayout()
+        self.ai_phases_pp = NumberDisplay("ai_phases_pp")
+        layout2.addWidget(self.ai_phases_pp)
+        self.ai_phases_pp_um = NumberDisplay("ai_phases_pp_um")
+        layout2.addWidget(self.ai_phases_pp_um)
+        self.ai_scales_pp = NumberDisplay("ai_scales_pp")
+        layout2.addWidget(self.ai_scales_pp)
+        self.ai_scales_pp_um = NumberDisplay("ai_scales_pp_um")
+        layout2.addWidget(self.ai_scales_pp_um)
+        layout.addLayout(layout2)
+
         layout.addWidget(self.chart2)
+
+        layout3 = QHBoxLayout()
+        self.diff_pp = NumberDisplay("diff_pp")
+        layout3.addWidget(self.diff_pp)
+        self.diff_pp_um = NumberDisplay("diff_pp_um")
+        layout3.addWidget(self.diff_pp_um)
+
+        layout.addLayout(layout3)
 
         self.chart3 = StreamingChart(1, QScatterSeries)
         layout.addWidget(self.chart3)
         self.chart3.series[0].setMarkerSize(5)
-        self.chart3.series[0].setName("mdiff")
+        self.chart3.series[0].setName("diff")
         self.chart3.axis_x.setTitleText("Encoder position raw")
-
-
 
     def clear(self):
         self.error_chart.removePoints()
         self.chart2.removePoints()
         self.chart3.removePoints()
         self.num_error = 0
+
+    def update_cpr(self):
+        self.cpr = self.cpr_edit.getNumber()
+
+    def update_prefix(self):
+        self.prefix = self.prefix_edit.text()
+        self.raw.name = self.prefix + "raw"
+        self.disk_um.name = self.prefix + "disk_um"
+        self.disk_um.update()
+        try:
+            self.disk_um_val = float(self.disk_um.number_widget.text())
+            self.cpr_edit.setNumber(int(float(current_motor()[self.prefix[0] + "cpr"].get())))
+        except ValueError:
+            self.disk_um_val = 18600
+            self.cpr_edit.setNumber(2**24)
+        self.update_cpr()
 
     def update(self):
         super(EncoderTab, self).update()
@@ -2318,28 +2396,30 @@ class EncoderTab(MotorTab):
         self.t_seconds += dt
         self.mcu_timestamp = self.status.mcu_timestamp
 
-        prefix = self.prefix.text()
-        cpr = self.cpr.getNumber()
+        prefix = self.prefix
         chart_update = False
         chart2_val = 0
         raw = 0
 
         chart3_val = 0
+        chart4_val = 0
         try:
-            self.raw.name = prefix + "raw"
-            error_pos = int(current_motor()[prefix + "last_error_pos"].get()) % cpr
+
+            error_pos = int(current_motor()[prefix + "last_error_pos"].get()) % self.cpr
             if (self.last_error_pos != error_pos):
                 error_pos_new = error_pos
                 self.num_error += 1
                 chart_update = True
             self.last_error_pos = error_pos
 
-            warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % cpr
+            warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % self.cpr
 
             chart2_val = float(current_motor()[prefix + "ai_phases"].get())
             raw = self.raw.getNumber()
 
-            chart3_val = int(current_motor()["mdiff"].get())
+            chart4_val = float(current_motor()[prefix + "ai_scales"].get())
+
+            chart3_val = int(current_motor()[prefix[0] + "diff"].get())
         except ValueError:
             error_pos = 0
             warn_pos = 0
@@ -2348,9 +2428,20 @@ class EncoderTab(MotorTab):
             self.error_chart.update([error_pos, warn_pos], [1, 1])
 
         self.last_raw = raw
-        self.chart2.update(raw, [chart2_val])
+        self.chart2.update(raw, [chart2_val, chart4_val])
         self.chart3.update(raw, [chart3_val])
 
+        pp = self.chart3.axis_y.max() - self.chart3.axis_y.min()
+        self.diff_pp.setNumber(pp)
+        self.diff_pp_um.setNumber(pp*2*np.pi/2**24/2*self.disk_um_val)
+
+        pp = self.chart2.axis_y.max() - self.chart2.axis_y.min()
+        self.ai_phases_pp.setNumber(pp)
+        self.ai_phases_pp_um.setNumber(pp/166.0*1000/10700.0*self.disk_um_val)
+
+        pp = self.chart2.axis_y2.max() - self.chart2.axis_y2.min()
+        self.ai_scales_pp.setNumber(pp)
+        self.ai_scales_pp_um.setNumber(pp/0.1*1000/10700.0*self.disk_um_val)
 
     def num_points_update(self, value):
         try:
