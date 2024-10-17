@@ -2275,7 +2275,7 @@ class EncoderTab(MotorTab):
         self.num_points.signal.connect(self.num_points_update)
         layout1.addWidget(self.num_points)
 
-        self.prefix = "m1"
+        self.prefix = "m"
         self.prefix_edit = QLineEdit(self.prefix)
         self.prefix_edit.textChanged.connect(self.update_prefix)
         self.raw = APIDisplay("raw")
@@ -2317,7 +2317,7 @@ class EncoderTab(MotorTab):
         self.error_chart.axis_x.setMax(2**24)
         self.error_chart.axis_x.setTitleText("Encoder position raw")
 
-        self.last_error_pos = int(current_motor()[self.prefix + "last_error_pos"].get()) % self.cpr
+        self.last_error_pos = 0
         self.num_error = 0
         self.last_raw = 0
 
