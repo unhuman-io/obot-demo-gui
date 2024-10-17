@@ -2006,7 +2006,43 @@ class StreamingChart2(StreamingChart):
         except ValueError:
             pass
 
+class HistogramLineChart(StreamingChart):
+    def __init__(self, xmin=0, xmax=1, num_lines=1, linetype=QLineSeries, *args, **kwargs):
+        super(HistogramLineChart, self).__init__(num_lines=num_lines, linetype=linetype, *args, **kwargs)
+        self.length = 500
+        self.axis_x.setMin(xmin)
+        self.axis_x.setMax(xmax)
+        self.axis_y.setMin(0)
 
+        for i in range(num_lines):
+            for j in range(self.length):
+                xval = xmin + j*(xmax-xmin)/self.length
+                self.series[i].append(xval, 0)
+
+    def update(self, t, data):
+        try:
+            max1 = float("-inf")
+            
+            for i in range(self.num_lines):
+                val = None
+                if hasattr(t, "__iter__"):
+                    val = t[i]
+                else:
+                    val = t
+                if val is not None:
+                    index = int((val - self.axis_x.min())/self.axis_x.max()*self.length)
+                    print("index: ", index)
+                    if index < self.length:
+                        point = self.series[i].at(index)
+                        point.setY(point.y() + 1)
+                        self.series[i].replace(index, point)
+
+            if self.update_limits:
+                max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
+                self.axis_y.setMax(max1)
+        except ValueError:
+            pass
+            
 
 class PositionTuningTab(MotorTab):
     def __init__(self, *args, **kwargs):
@@ -2296,7 +2332,7 @@ class EncoderTab(MotorTab):
 
         layout.addLayout(layout1)
 
-        self.error_chart = StreamingChart(2, QScatterSeries)
+        self.error_chart = HistogramLineChart(0, 2**24, 2)
         layout.addWidget(self.error_chart)
 
         
@@ -2308,13 +2344,11 @@ class EncoderTab(MotorTab):
         self.error_chart.series[0].setName("error")
         self.error_chart.series[1].setName("warning")
         self.error_chart.axis_y.setTitleText("error")
-        self.error_chart.series[0].setMarkerSize(5)
-        self.error_chart.series[1].setMarkerSize(5)
-        self.error_chart.update_limits = False
-        self.error_chart.axis_y.setMin(0)
-        self.error_chart.axis_y.setMax(2)
-        self.error_chart.axis_x.setMin(0)
-        self.error_chart.axis_x.setMax(2**24)
+        #self.error_chart.series[0].setMarkerSize(5)
+        #self.error_chart.series[1].setMarkerSize(5)
+        #self.error_chart.update_limits = False
+        # self.error_chart.axis_y.setMin(0)
+        # self.error_chart.axis_y.setMax(2)
         self.error_chart.axis_x.setTitleText("Encoder position raw")
 
         self.last_error_pos = 0
@@ -2425,7 +2459,7 @@ class EncoderTab(MotorTab):
             warn_pos = 0
 
         if chart_update:
-            self.error_chart.update([error_pos, warn_pos], [1, 1])
+            self.error_chart.update([error_pos, None], [1, 1])
 
         self.last_raw = raw
         self.chart2.update(raw, [chart2_val, chart4_val])
