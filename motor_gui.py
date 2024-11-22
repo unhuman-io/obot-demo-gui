@@ -1478,6 +1478,9 @@ class MainWindow(QMainWindow):
         if "-i" in QCoreApplication.arguments():
             self.ip_address = QCoreApplication.arguments()[QCoreApplication.arguments().index("-i") + 1]
             self.connect_motor_ip(self.ip_address)
+        elif "-f" in QCoreApplication.arguments():
+            self.can_address = QCoreApplication.arguments()[QCoreApplication.arguments().index("-f") + 1]
+            self.connect_motor_can(self.can_address)
         else:
             self.connect_motor(motors[0].name())
 
@@ -1568,6 +1571,12 @@ class MainWindow(QMainWindow):
         self.ip_address = ip
         motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
         self.connect_motor_generic(ip)
+
+    def connect_motor_can(self, text):
+        print("Connecting motor " + text)
+        motor_manager.get_motors_can([text], allow_simulated = self.simulated)
+        current_motor()["can_send_decimation"] = "100"
+        self.connect_motor_generic(text)
 
     def connect_motor(self, name):
          global cpu_frequency
@@ -2112,6 +2121,8 @@ class StepperTab(MotorTab):
             self.num_poles = float(num_poles)
         except ValueError:
             self.num_poles = 1
+        if self.num_poles == 0:
+            self.num_poles = 1 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
