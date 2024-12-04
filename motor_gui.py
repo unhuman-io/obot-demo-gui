@@ -2039,15 +2039,15 @@ class HistogramLineChart(StreamingChart):
             if self.update_limits:
                 for i in range(self.num_lines):
                     max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
-                    self.axis_y.setMax(20)#max1)
+                    self.axis_y.setMax(max1)
         except ValueError:
             pass
 
     def removePoints(self):
         for i in range(self.num_lines):
-            for point in self.series[i].pointsVector():
+            for index, point in enumerate(self.series[i].pointsVector()):
                 point.setY(0)
-                self.series[i].replace(point)
+                self.series[i].replace(index,point)
                 
             
 
