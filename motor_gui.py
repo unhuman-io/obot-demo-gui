@@ -2031,17 +2031,24 @@ class HistogramLineChart(StreamingChart):
                     val = t
                 if val is not None:
                     index = int((val - self.axis_x.min())/self.axis_x.max()*self.length)
-                    print("index: ", index)
                     if index < self.length:
                         point = self.series[i].at(index)
                         point.setY(point.y() + 1)
                         self.series[i].replace(index, point)
 
             if self.update_limits:
-                max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
-                self.axis_y.setMax(max1)
+                for i in range(self.num_lines):
+                    max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
+                    self.axis_y.setMax(20)#max1)
         except ValueError:
             pass
+
+    def removePoints(self):
+        for i in range(self.num_lines):
+            for point in self.series[i].pointsVector():
+                point.setY(0)
+                self.series[i].replace(point)
+                
             
 
 class PositionTuningTab(MotorTab):
