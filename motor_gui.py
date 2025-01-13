@@ -220,7 +220,7 @@ class APIDir(APIBool):
             print("{}=1".format(self.name))
         else:
             current_motor()[self.name] = str(-1)
-            print("{}=0".format(self.name)) 
+            print("{}=-1".format(self.name)) 
 
 class NumberEditSlider(NumberEdit):
     def __init__(self, *args, **kwargs):
