@@ -1566,7 +1566,7 @@ class MainWindow(QMainWindow):
             if text in self.joint_to_ip_map.keys():
                 ip = self.joint_to_ip_map[text]
             else:
-                raise RuntimeError(f"IP address for {text} is not defined")
+                ip = text
 
         print("Connecting motor " + ip)
         self.ip_address = ip
