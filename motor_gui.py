@@ -1235,11 +1235,14 @@ class CalibrateTab(MotorTab):
         self.update_list.append(self.idir)
         layout.addLayout(boollayout)
         
+        self.output_zero_button = QPushButton("Zero output")
+        self.output_zero_button.clicked.connect(self.output_zero)
         self.obias = APIEdit("obias", "output bias (rad)", "main_loop_param.output_encoder.bias")
         self.obias.signal.connect(self.obias_set)
         self.oposition = NumberDisplay("output position (rad)", tooltip="status.joint_position")
         self.odir = APIDir("odir", "output position dir", "main_loop_param.output_encoder.dir")
         olayout = QHBoxLayout()
+        olayout.addWidget(self.output_zero_button)
         olayout.addWidget(self.obias)
         olayout.addWidget(self.oposition)
         olayout.addWidget(self.odir)
@@ -1247,12 +1250,14 @@ class CalibrateTab(MotorTab):
         self.update_list.append(self.odir)
         layout.addLayout(olayout)
 
+        self.motor_zero_button = QPushButton("Zero motor")
+        self.motor_zero_button.clicked.connect(self.startup_motor_zero)
         self.mbias = APIEdit("startup_mbias", "startup motor bias (rad)", "also calls set_startup_bias\nstartup_param.motor_encoder_bias")
         self.mbias.signal.connect(self.mbias_set)
         self.mposition = NumberDisplay("motor position (rad)", tooltip="status.motor_position")
         self.mdir = APIDir("mdir", "motor position dir", "fast_loop_param.motor_encoder.dir")
-
         mlayout = QHBoxLayout()
+        mlayout.addWidget(self.motor_zero_button)
         mlayout.addWidget(self.mbias)
         mlayout.addWidget(self.mposition)
         mlayout.addWidget(self.mdir)
@@ -1360,6 +1365,20 @@ class CalibrateTab(MotorTab):
         motor_manager.set_command_current([self.find_limits_current.getNumber()])
         motor_manager.set_command_velocity([self.find_limits_velocity.getNumber()])
         motor_manager.write_saved_commands()
+
+    def output_zero(self):
+        print("output zero")
+        current_motor()["obias"] = "0"
+        self.update()
+        current_motor()["obias"] = str(-self.status.joint_position)
+
+    def startup_motor_zero(self):
+        print("startup motor zero")
+        current_motor()["startup_mbias"] = "0"
+        current_motor()["set_startup_bias"].get()
+        self.update()
+        current_motor()["startup_mbias"] = str(-self.status.motor_position)
+        current_motor()["set_startup_bias"].get()
 
     def mbias_set(self):
         print("setting mbias")
