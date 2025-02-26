@@ -1265,10 +1265,13 @@ class CalibrateTab(MotorTab):
         self.update_list.append(self.mdir)
         layout.addLayout(mlayout)
 
+        self.torque_zero_button = QPushButton("Zero torque")
+        self.torque_zero_button.clicked.connect(self.torque_zero)
         self.tbias = APIEdit("tbias", "torque bias (Nm)", "main_loop_param.torque_sensor.bias")
         self.torque = NumberDisplay("torque (Nm)", tooltip="status.torque")
         self.tdir = APIDir("tdir", "torque dir", "main_loop_param.torque_sensor.dir")
         tlayout = QHBoxLayout()
+        tlayout.addWidget(self.torque_zero_button)
         tlayout.addWidget(self.tbias)
         tlayout.addWidget(self.torque)
         tlayout.addWidget(self.tdir)
@@ -1371,6 +1374,12 @@ class CalibrateTab(MotorTab):
         current_motor()["obias"] = "0"
         self.update()
         current_motor()["obias"] = str(-self.status.joint_position)
+    
+    def torque_zero(self):
+        print("torque zero")
+        current_motor()["tbias"] = "0"
+        self.update()
+        current_motor()["tbias"] = str(-self.status.torque)
 
     def startup_motor_zero(self):
         print("startup motor zero")
