@@ -503,7 +503,9 @@ class PlotTab(MotorTab):
         self.layout = QVBoxLayout()
         self.combo_box = QComboBox()
         self.combo_box.addItems(["motor_position", "joint_position", "iq", "torque", "motor_encoder", 
-            "motor_velocity", "joint_velocity", "iq_desired", "reserved", "encoder_error", "cogging"])
+            "motor_velocity", "joint_velocity", "iq_desired", "reserved", "encoder_error", "cogging",
+            "reserved0","reserved1","reserved2","reserved3","reserved4","reserved5","reserved6","reserved7",
+            "reserved8","reserved9"])
         self.combo_box.currentIndexChanged.connect(self.chart.removePoints)
         self.combo_box.currentIndexChanged.connect(self.name_change)
         self.layout.addWidget(self.combo_box)
@@ -549,6 +551,8 @@ class PlotTab(MotorTab):
         elif plot_str == "cogging":
             val = s.iq
             x = np.mod(s.motor_position, 2*np.pi)
+        elif re.match(r'reserved(\d)', plot_str):
+            val = s.large.reserved[int(plot_str[-1])]
         else:
             val = getattr(s, plot_str)
         
