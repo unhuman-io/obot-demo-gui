@@ -241,17 +241,17 @@ class NumberEditSlider(NumberEdit):
         except ValueError:
             pass
 
-class ParameterEdit(NumberEdit):
-    def __init__(self, *args, **kwargs):
-        super(ParameterEdit, self).__init__(*args, **kwargs)
-        self.signal.connect(self.set_value)
+# class ParameterEdit(NumberEdit):
+#     def __init__(self, *args, **kwargs):
+#         super(ParameterEdit, self).__init__(*args, **kwargs)
+#         self.signal.connect(self.set_value)
 
-    def refresh_value(self):
-        self.setNumber(current_motor()[self.name].get())
+#     def refresh_value(self):
+#         self.setNumber(current_motor()[self.name].get())
 
-    def set_value(self, value):
-        print("set {}={}".format(self.name, value))
-        current_motor()[self.name] = str(value)
+#     def set_value(self, value):
+#         print("set {}={}".format(self.name, value))
+#         current_motor()[self.name] = str(value)
 
 class StatusDisplay(QPushButton):
     def __init__(self, *args, **kwargs):
@@ -658,14 +658,14 @@ class VelocityTab(MotorTab):
         self.axis_y.setRange(-100,100)
 
         parameter_layout = QGridLayout()
-        self.kp = ParameterEdit("vkp","kp")
-        self.ki = ParameterEdit("vki","ki")
-        self.max = ParameterEdit("vmax","current limit")
+        self.kp = APIEdit("vkp","kp")
+        self.ki = APIEdit("vki","ki")
+        self.max = APIEdit("vmax","current limit")
         self.max.signal.connect(lambda val: current_motor()["vki_limit"].set(str(val)))
-        self.accel = ParameterEdit("vacceleration_limit","acceleration limit")
-        self.imax = ParameterEdit("imax","voltage limit")
+        self.accel = APIEdit("vacceleration_limit","acceleration limit")
+        self.imax = APIEdit("imax","voltage limit")
         self.imax.signal.connect(self.set_imax)
-        self.filter = ParameterEdit("voutput_filt", "output filter")
+        self.filter = APIEdit("voutput_filt", "output filter")
 
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.ki,0,1)
@@ -734,12 +734,12 @@ class VelocityTab(MotorTab):
         current_motor()["idki_limit"].set(str(val))
 
     def unpause(self):
-        self.kp.refresh_value()
-        self.ki.refresh_value()
-        self.max.refresh_value()
-        self.imax.refresh_value()
-        self.accel.refresh_value()
-        self.filter.refresh_value()
+        # self.kp.refresh_value()
+        # self.ki.refresh_value()
+        # self.max.refresh_value()
+        # self.imax.refresh_value()
+        # self.accel.refresh_value()
+        # self.filter.refresh_value()
         return super().unpause()
 
 
@@ -1746,27 +1746,36 @@ class CurrentTuningTab(MotorTab):
         layout.addWidget(self.mode)
 
         parameter_layout = QGridLayout()
-        self.kp = ParameterEdit("ikp", "kp (V/A)")
-        self.kp.signal.connect(lambda val: [current_motor()["idkp"].set(str(val)), current_motor()["ikp2"].set(str(val)), current_motor()["idkp2"].set(str(val))])
-        self.ki = ParameterEdit("iki", "ki (V/(A*T))")
-        self.ki.signal.connect(lambda val: [current_motor()["idki"].set(str(val)), current_motor()["iki2"].set(str(val)), current_motor()["idki2"].set(str(val))])
-        self.ki_limit = ParameterEdit("iki_limit", "ki_limit (V)")
+        self.kp = APIEdit("ikp", "kp (V/A)")
+        self.kp.signal.connect(lambda val: current_motor()["idkp"].set(str(val)))
+        self.ki = APIEdit("iki", "ki (V/(A*T))")
+        self.ki.signal.connect(lambda val: current_motor()["idki"].set(str(val)))
+        self.ki_limit = APIEdit("iki_limit", "ki_limit (V)")
         self.ki_limit.signal.connect(lambda val: current_motor()["idki_limit"].set(str(val)))
-        self.command_max = ParameterEdit("imax", "command_max (V)")
+        self.resistance = APIEdit("SCR_R_base", "r (ohm)")
+        self.inductance = APIEdit("SCR_L_base", "l (H)")
+        self.control_bandwidth = APIEdit("SCR_q_Wbw", "control_bandwidth (Hz)")
+        self.control_bandwidth.signal.connect(lambda val: current_motor()["SCR_d_Wbw"].set(str(val)))
+        self.command_max = APIEdit("imax", "command_max (V)")
         self.command_max.signal.connect(lambda val: current_motor()["idmax"].set(str(val)))
-        self.filter = ParameterEdit("iq_filter", "current_filter (Hz)")
+        self.filter = APIEdit("iq_filter", "current_filter (Hz)")
         self.filter.signal.connect(lambda val: current_motor()["id_filter"].set(str(val)))
-        self.pwm_mult = ParameterEdit("pwm_mult")
-        self.ilimit = ParameterEdit("ilimit", "current rate limit (A/s)", tooltip="fast_loop_param.foc_param.i{q,d}_rate_limit")
+        self.pwm_mult = APIEdit("pwm_mult")
+        self.ilimit = APIEdit("ilimit", "current rate limit (A/s)", tooltip="fast_loop_param.foc_param.i{q,d}_rate_limit")
         self.ilimit.signal.connect(lambda val: current_motor()["ilimit"].set(str(val)))
         parameter_layout.addWidget(self.kp,0,0)
         parameter_layout.addWidget(self.ki,0,1)
         parameter_layout.addWidget(self.ki_limit,0,2)
+        parameter_layout.addWidget(self.resistance,0,3)
+        parameter_layout.addWidget(self.inductance,0,4)
+        parameter_layout.addWidget(self.control_bandwidth,0,5)
         parameter_layout.addWidget(self.command_max,1,0)
         parameter_layout.addWidget(self.filter,1,1)
         parameter_layout.addWidget(self.pwm_mult,1,2)
         parameter_layout.addWidget(self.ilimit,2,0)
         layout.addLayout(parameter_layout)
+        self.update_list += [self.kp, self.ki, self.ki_limit, self.resistance, self.inductance, 
+                            self.control_bandwidth, self.command_max, self.filter, self.pwm_mult, self.ilimit]
 
         # self.text = QPlainTextEdit()
         # layout.addWidget(self.text)
@@ -1836,6 +1845,9 @@ class CurrentTuningTab(MotorTab):
         fast_log = current_motor().get_fast_log()
         #self.text.setPlainText(fast_log)
 
+        self.kp.update()
+        print(self.kp.getNumber())
+        print(self.ki.getNumber())
         try:
             num_poles = float(current_motor()["num_poles"].get())
             data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=0)
@@ -1919,12 +1931,12 @@ class CurrentTuningTab(MotorTab):
 
 
     def unpause(self):
-        self.kp.refresh_value()
-        self.ki.refresh_value()
-        self.ki_limit.refresh_value()
-        self.command_max.refresh_value()
-        self.filter.refresh_value()
-        self.pwm_mult.refresh_value()
+        # self.kp.refresh_value()
+        # self.ki.refresh_value()
+        # self.ki_limit.refresh_value()
+        # self.command_max.refresh_value()
+        # self.filter.refresh_value()
+        # self.pwm_mult.refresh_value()
         return super().unpause()
 
     def command_update(self):
@@ -2134,7 +2146,7 @@ class PositionTuningTab(MotorTab):
         parameter_layout = QGridLayout()
         self.kp = APIEdit("kp", "kp (A/rad)", "main_loop_param.position_controller.position.kp")
         self.kd = APIEdit("kd", "kd (A*s/rad)")
-        #self.ki_limit = ParameterEdit("ki_limit")
+        #self.ki_limit = APIEdit("ki_limit")
         self.command_max = APIEdit("max", "command max (A)")
         self.output_filter = APIEdit("output_filter", "output filter (Hz)")
         self.velocity_filter = APIEdit("velocity_filter", "velocity_filter (Hz)")
