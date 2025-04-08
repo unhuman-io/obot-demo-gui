@@ -1776,24 +1776,36 @@ class CurrentTuningTab(MotorTab):
         self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.series = QLineSeries()
         self.series.setUseOpenGL(True)
-        self.series.setName("desired")
+        self.series.setName("q_desired")
         self.series2 = QLineSeries()
         self.series2.setUseOpenGL(True)
-        self.series2.setName("measured (filt)")
+        self.series2.setName("q_measured (filt)")
+        self.series_d_des = QLineSeries()
+        self.series_d_des.setUseOpenGL(True)
+        self.series_d_des.setName("d_desired")
+        self.series_d_meas = QLineSeries()
+        self.series_d_meas.setUseOpenGL(True)
+        self.series_d_meas.setName("d_measured (filt)")
         self.chart.addSeries(self.series)
         self.chart.addSeries(self.series2)
+        self.chart.addSeries(self.series_d_des)
+        self.chart.addSeries(self.series_d_meas)
         self.axis_x = QValueAxis()
         self.axis_x.setTickCount(10)
         self.axis_x.setTitleText("time (ms)")
         self.chart.addAxis(self.axis_x, Qt.AlignmentFlag.AlignBottom)
         self.series.attachAxis(self.axis_x)
         self.series2.attachAxis(self.axis_x)
+        self.series_d_des.attachAxis(self.axis_x)
+        self.series_d_meas.attachAxis(self.axis_x)
         self.axis_y = QValueAxis()
         self.axis_y.setTickCount(10)
         self.axis_y.setTitleText("current (A)")
         self.chart.addAxis(self.axis_y, Qt.AlignmentFlag.AlignLeft)
         self.series.attachAxis(self.axis_y)
         self.series2.attachAxis(self.axis_y)
+        self.series_d_des.attachAxis(self.axis_y)
+        self.series_d_meas.attachAxis(self.axis_y)
         self.axis_y.setRange(-100,100)
         self.axis_y2 = QValueAxis()
         self.axis_y2.setTickCount(10)
@@ -1837,7 +1849,6 @@ class CurrentTuningTab(MotorTab):
         #self.text.setPlainText(fast_log)
 
         try:
-            num_poles = float(current_motor()["num_poles"].get())
             data = np.genfromtxt(StringIO(fast_log), delimiter=",", names=True, skip_footer=1, skip_header=0)
             inds = data["timestamp"].argsort()
             data = data[inds]
@@ -1845,21 +1856,24 @@ class CurrentTuningTab(MotorTab):
             t_seconds -= max(t_seconds)
 
 
-            iq_des = np.matrix(data["iq_des"]).transpose()
-            iq_meas_filt = np.matrix(data["iq_meas_filt"]).transpose()
-            va = np.matrix(data["va"]).transpose()
-            vb = np.matrix(data["vb"]).transpose()
-            vc = np.matrix(data["vc"]).transpose()
-            pos = num_poles*np.matrix(data["position"]).transpose()
+            iq_des = np.matrix(data["command_iq"]).transpose()
+            iq_meas_filt = np.matrix(data["measured_iq"]).transpose()
+            id_des = np.matrix(data["command_id"]).transpose()
+            id_meas_filt = np.matrix(data["measured_id"]).transpose()
+
+            #pos = np.matrix(data["electrical_position"]).transpose()
             dt = (t_seconds[1] - t_seconds[0])/1000
 
-            cos_t = np.cos(pos)
-            sin_t = np.sin(pos)
+            # cos_t = np.cos(pos)
+            # sin_t = np.sin(pos)
 
-            Kc = np.matrix([[2.0/3, -1.0/3, -1.0/3], [0, 1.0/np.sqrt(3), -1.0/np.sqrt(3)]])
-            valpha_beta = (Kc*np.block([va,vb,vc]).transpose()).transpose()*1.5
-            vd = np.asarray(cos_t) * np.asarray(valpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(valpha_beta[:,1])
-            vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
+            # Kc = np.matrix([[2.0/3, -1.0/3, -1.0/3], [0, 1.0/np.sqrt(3), -1.0/np.sqrt(3)]])
+            # valpha_beta = (Kc*np.block([va,vb,vc]).transpose()).transpose()*1.5
+            # vd = np.asarray(cos_t) * np.asarray(valpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(valpha_beta[:,1])
+            # vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
+
+            vd = np.matrix(data["command_vd"]).transpose()
+            vq = np.matrix(data["command_vq"]).transpose()
 
             #fmeas = fft(iq_des)
             if self.command.current_tuning.mode == motor.TuningMode.Chirp:
@@ -1900,12 +1914,18 @@ class CurrentTuningTab(MotorTab):
             self.series.replace(xy) #append(self.t_seconds, float(val))
             xy2 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(iq_meas_filt)))] # abs(fmeas)))]#iq_meas_filt))]
             self.series2.replace(xy2)
+            xy_d_des = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(id_des)))]
+            self.series_d_des.replace(xy_d_des)
+            xy_d_meas = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(id_meas_filt)))]
+            self.series_d_meas.replace(xy_d_meas)
             xy3 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(vd)))]
             self.seriesvd.replace(xy3)
             xy4 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(vq)))]
             self.seriesvq.replace(xy4)
-            min_y = min(min([d.y() for d in self.series.pointsVector()]), min([d.y() for d in self.series2.pointsVector()]))
-            max_y = max(max([d.y() for d in self.series.pointsVector()]), max([d.y() for d in self.series2.pointsVector()]))
+            min_y = min(min([d.y() for d in self.series.pointsVector()]), min([d.y() for d in self.series2.pointsVector()]),
+                        min([d.y() for d in self.series_d_des.pointsVector()]), min([d.y() for d in self.series_d_meas.pointsVector()]))
+            max_y = max(max([d.y() for d in self.series.pointsVector()]), max([d.y() for d in self.series2.pointsVector()]),
+                        max([d.y() for d in self.series_d_des.pointsVector()]), max([d.y() for d in self.series_d_meas.pointsVector()]))
             self.axis_y.setMin(min_y)
             self.axis_y.setMax(max_y)
             self.axis_x.setMin(min(t_seconds))
