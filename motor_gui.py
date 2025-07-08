@@ -2056,6 +2056,11 @@ class StreamingChart2(StreamingChart):
                     self.series[i].remove(0)
                 min1 = min([d.y() for d in self.series[i].pointsVector()])
                 max1 = max([d.y() for d in self.series[i].pointsVector()])
+                diff = max1 - min1
+                if diff == 0:
+                    diff = 1
+                min1 = min1 - .1 * diff
+                max1 = max1 + .1 * diff
 
                 if self.update_limits:
                     if i == 0:
@@ -2072,7 +2077,7 @@ class StreamingChart2(StreamingChart):
 class HistogramLineChart(StreamingChart):
     def __init__(self, xmin=0, xmax=1, num_lines=1, linetype=QLineSeries, *args, **kwargs):
         super(HistogramLineChart, self).__init__(num_lines=num_lines, linetype=linetype, *args, **kwargs)
-        self.length = 500
+        self.length = 2000
         self.axis_x.setMin(xmin)
         self.axis_x.setMax(xmax)
         self.axis_y.setMin(0)
@@ -2524,10 +2529,10 @@ class EncoderTab(MotorTab):
         self.diff_pp_um = NumberDisplay("diff_pp_um")
         layout3.addWidget(self.diff_pp_um)
 
-        layout.addLayout(layout3)
+        #layout.addLayout(layout3)
 
         self.chart3 = StreamingChart(1, QScatterSeries)
-        layout.addWidget(self.chart3)
+        #layout.addWidget(self.chart3)
         self.chart3.series[0].setMarkerSize(5)
         self.chart3.series[0].setName("diff")
         self.chart3.axis_x.setTitleText("Encoder position raw")
@@ -2575,22 +2580,20 @@ class EncoderTab(MotorTab):
                 error_pos_new = error_pos
                 self.num_error += 1
                 chart_update = True
+                print("Error at position: {}".format(error_pos_new))
+                self.error_chart.update([error_pos, None], [1, 1])
             self.last_error_pos = error_pos
 
-            warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % self.cpr
+            #warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % self.cpr
 
             chart2_val = float(current_motor()[prefix + "ai_phases"].get())
             raw = self.raw.getNumber()
 
             chart4_val = float(current_motor()[prefix + "ai_scales"].get())
 
-            chart3_val = int(current_motor()[prefix[0] + "diff"].get())
+            #chart3_val = int(current_motor()[prefix[0] + "diff"].get())
         except ValueError:
-            error_pos = 0
-            warn_pos = 0
-
-        if chart_update:
-            self.error_chart.update([error_pos, None], [1, 1])
+            pass
 
         self.last_raw = raw
         self.chart2.update(raw, [chart2_val, chart4_val])
@@ -2611,6 +2614,7 @@ class EncoderTab(MotorTab):
     def num_points_update(self, value):
         try:
             self.error_chart.length = int(value)
+            self.chart2.length = int(value)
         except ValueError:
             pass
         self.error_chart.removePoints()
