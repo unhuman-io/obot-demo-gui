@@ -2488,6 +2488,7 @@ class EncoderTab(MotorTab):
         self.error_chart.axis_x.setTitleText("Encoder position raw")
 
         self.last_error_pos = 0
+        self.last_warn_pos = 0
         self.num_error = 0
         self.last_raw = 0
 
@@ -2579,12 +2580,16 @@ class EncoderTab(MotorTab):
             if (self.last_error_pos != error_pos):
                 error_pos_new = error_pos
                 self.num_error += 1
-                chart_update = True
                 print("Error at position: {}".format(error_pos_new))
                 self.error_chart.update([error_pos, None], [1, 1])
             self.last_error_pos = error_pos
 
-            #warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % self.cpr
+            warn_pos = int(current_motor()[prefix + "last_warn_pos"].get()) % self.cpr
+            if (self.last_warn_pos != warn_pos):
+                warn_pos_new = warn_pos
+                print("Warning at position: {}".format(warn_pos_new))
+                self.error_chart.update([None, warn_pos], [0, 1])
+            self.last_warn_pos = warn_pos
 
             chart2_val = float(current_motor()[prefix + "ai_phases"].get())
             raw = self.raw.getNumber()
