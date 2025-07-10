@@ -2514,10 +2514,14 @@ class EncoderTab(MotorTab):
         layout2 = QHBoxLayout()
         self.ai_phases_pp = NumberDisplay("ai_phases_pp")
         layout2.addWidget(self.ai_phases_pp)
+        self.ai_phases_avg = NumberDisplay("ai_phases_avg")
+        layout2.addWidget(self.ai_phases_avg)
         self.ai_phases_pp_um = NumberDisplay("ai_phases_pp_um")
         layout2.addWidget(self.ai_phases_pp_um)
         self.ai_scales_pp = NumberDisplay("ai_scales_pp")
         layout2.addWidget(self.ai_scales_pp)
+        self.ai_scales_avg = NumberDisplay("ai_scales_avg")
+        layout2.addWidget(self.ai_scales_avg)
         self.ai_scales_pp_um = NumberDisplay("ai_scales_pp_um")
         layout2.addWidget(self.ai_scales_pp_um)
         layout.addLayout(layout2)
@@ -2608,12 +2612,24 @@ class EncoderTab(MotorTab):
         self.diff_pp.setNumber(pp)
         self.diff_pp_um.setNumber(pp*2*np.pi/2**24/2*self.disk_um_val)
 
-        pp = self.chart2.axis_y.max() - self.chart2.axis_y.min()
+        y = np.array([d.y() for d in self.chart2.series[0].pointsVector()])
+        x = np.array([d.x() for d in self.chart2.series[0].pointsVector()])
+        inds = np.digitize(x, np.linspace(0, 2**24, 100))
+        data = np.bincount(inds-1, y)/np.bincount(inds-1)
+        data = data[~np.isnan(data)]
+        pp = max(data) - min(data)
         self.ai_phases_pp.setNumber(pp)
+        self.ai_phases_avg.setNumber(np.mean(data))
         self.ai_phases_pp_um.setNumber(pp/166.0*1000/10700.0*self.disk_um_val)
 
-        pp = self.chart2.axis_y2.max() - self.chart2.axis_y2.min()
+        x = np.array([d.x() for d in self.chart2.series[1].pointsVector()])
+        y = np.array([d.y() for d in self.chart2.series[1].pointsVector()])
+        inds = np.digitize(x, np.linspace(0, 2**24, 100))
+        data = np.bincount(inds-1, y)/np.bincount(inds-1)
+        data = data[~np.isnan(data)]
+        pp = max(data) - min(data)
         self.ai_scales_pp.setNumber(pp)
+        self.ai_scales_avg.setNumber(np.mean(data))
         self.ai_scales_pp_um.setNumber(pp/0.1*1000/10700.0*self.disk_um_val)
 
     def num_points_update(self, value):
