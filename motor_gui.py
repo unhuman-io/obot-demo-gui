@@ -1987,7 +1987,7 @@ class CurrentTuningTab(MotorTab):
 
 
 class StreamingChart(QChartView):
-    def __init__(self, num_lines=1, linetype=QLineSeries, *args, **kwargs):
+    def __init__(self, num_lines=1, linetype=QLineSeries, num_round=2, *args, **kwargs):
         self.chart = QChart()
         super(StreamingChart, self).__init__(self.chart, *args, **kwargs)
         self.setRubberBand(QChartView.VerticalRubberBand)
@@ -2041,8 +2041,10 @@ class StreamingChart(QChartView):
             self.series[i].removePoints(0,self.series[i].count())
 
 class StreamingChart2(StreamingChart):
-    def __init__(self, linetype=QLineSeries, *args, **kwargs):
-        super(StreamingChart2, self).__init__(num_lines=2, linetype=linetype, *args, **kwargs)
+    def __init__(self, linetype=QLineSeries, num_round_l=2, num_round_r=2, *args, **kwargs):
+        super(StreamingChart2, self).__init__(num_lines=2, linetype=linetype, num_round=num_round_l, *args, **kwargs)
+        self.num_round_l = num_round_l
+        self.num_round_r = num_round_r
         self.axis_y2 = QValueAxis()
         self.axis_y2.setTickCount(10)        
         self.chart.addAxis(self.axis_y2, Qt.AlignmentFlag.AlignRight)
@@ -2067,11 +2069,11 @@ class StreamingChart2(StreamingChart):
 
                 if self.update_limits:
                     if i == 0:
-                        self.axis_y.setMin(min1)
-                        self.axis_y.setMax(max1)
+                        self.axis_y.setMin(round(min1, self.num_round_l))
+                        self.axis_y.setMax(round(max1, self.num_round_l))
                     else:
-                        self.axis_y2.setMin(min1)
-                        self.axis_y2.setMax(max1)
+                        self.axis_y2.setMin(round(min1, self.num_round_r))
+                        self.axis_y2.setMax(round(max1, self.num_round_r))
                     self.axis_x.setMax(max([d.x() for d in self.series[0].pointsVector()]))
                     self.axis_x.setMin(min([d.x() for d in self.series[0].pointsVector()]))
         except ValueError:
@@ -2505,7 +2507,7 @@ class EncoderTab(MotorTab):
         layout1.addWidget(self.clear_button)
 
 
-        self.chart2 = StreamingChart2(QScatterSeries)
+        self.chart2 = StreamingChart2(QScatterSeries, num_round_l=0, num_round_r=3)
         self.chart2.series[0].setMarkerSize(5)
         self.chart2.series[1].setMarkerSize(5)
         self.chart2.axis_x.setTitleText("Encoder position raw")
