@@ -46,7 +46,8 @@ from PyQt5.QtWidgets import (
     QRadioButton,
     QFileDialog,
     QTextEdit,
-    QMessageBox
+    QMessageBox,
+    QGraphicsSimpleTextItem,
 )
 
 from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
@@ -2513,6 +2514,25 @@ class EncoderTab(MotorTab):
         self.chart2.series[0].setName("ai_phases")
         self.chart2.series[1].setName("ai_scales")
         self.chart2.axis_y2.setTitleText("ai_scales raw")
+        self.chart2.series_avg = [QLineSeries(), QLineSeries()]
+        self.chart2.series_avg[0].setUseOpenGL(True)
+        self.chart2.series_avg[1].setUseOpenGL(True)
+        self.chart2.chart.addSeries(self.chart2.series_avg[0])
+        self.chart2.chart.addSeries(self.chart2.series_avg[1])
+        self.chart2.series_avg[0].attachAxis(self.chart2.axis_x)
+        self.chart2.series_avg[0].attachAxis(self.chart2.axis_y)
+        self.chart2.series_avg[1].attachAxis(self.chart2.axis_x)
+        self.chart2.series_avg[1].attachAxis(self.chart2.axis_y2)
+        self.chart2.series_avg[0].setName("ai_phases avg")
+        self.chart2.series_avg[1].setName("ai_scales avg")
+        self.chart2.series_avg[0].setColor(self.chart2.series[0].color())
+        self.chart2.series_avg[1].setColor(self.chart2.series[1].color())
+        self.chart2.series_max = [QGraphicsSimpleTextItem(), QGraphicsSimpleTextItem()]
+        self.chart2.series_min = [QGraphicsSimpleTextItem(), QGraphicsSimpleTextItem()]
+        self.chart2.chart.scene().addItem(self.chart2.series_max[0])
+        self.chart2.chart.scene().addItem(self.chart2.series_max[1])
+        self.chart2.chart.scene().addItem(self.chart2.series_min[0])
+        self.chart2.chart.scene().addItem(self.chart2.series_min[1])
 
         layout2 = QHBoxLayout()
         self.num_avg_points = NumberEdit("num_avg", vertical=True)
@@ -2621,22 +2641,40 @@ class EncoderTab(MotorTab):
         y = np.array([d.y() for d in self.chart2.series[0].pointsVector()])
         x = np.array([d.x() for d in self.chart2.series[0].pointsVector()])
         inds = np.digitize(x, np.linspace(0, 2**24, int(self.num_avg_points.getNumber())))
+        x_avg = np.bincount(inds-1, x)/np.bincount(inds-1)
         data = np.bincount(inds-1, y)/np.bincount(inds-1)
         data = data[~np.isnan(data)]
         pp = max(data) - min(data)
         self.ai_phases_pp.setNumber(pp)
         self.ai_phases_avg.setNumber(np.mean(data))
         self.ai_phases_pp_um.setNumber(pp/166.0*1000/10700.0*self.disk_um_val)
+        self.chart2.series_avg[0].clear()
+        self.chart2.series_avg[0].replace([QPointF(x_avg[i], d) if not np.isnan(d) else QPointF() for i, d in enumerate(data)])
+        self.chart2.series_max[0].setText("{:.2f}".format(max(data)))
+        pos = self.chart2.chart.mapToPosition(QPointF(x_avg[np.argmax(data)], max(data)), self.chart2.series_avg[0])
+        self.chart2.series_max[0].setPos(pos)
+        self.chart2.series_min[0].setText("{:.2f}".format(min(data)))
+        pos = self.chart2.chart.mapToPosition(QPointF(x_avg[np.argmin(data)], min(data)), self.chart2.series_avg[0])
+        self.chart2.series_min[0].setPos(pos)
+
 
         x = np.array([d.x() for d in self.chart2.series[1].pointsVector()])
         y = np.array([d.y() for d in self.chart2.series[1].pointsVector()])
         inds = np.digitize(x, np.linspace(0, 2**24, int(self.num_avg_points.getNumber())))
+        x_avg = np.bincount(inds-1, x)/np.bincount(inds-1)
         data = np.bincount(inds-1, y)/np.bincount(inds-1)
         data = data[~np.isnan(data)]
         pp = max(data) - min(data)
         self.ai_scales_pp.setNumber(pp)
         self.ai_scales_avg.setNumber(np.mean(data))
         self.ai_scales_pp_um.setNumber(pp/0.1*1000/10700.0*self.disk_um_val)
+        self.chart2.series_avg[1].replace([QPointF(x_avg[i], d) if not np.isnan(d) else QPointF() for i, d in enumerate(data)])
+        self.chart2.series_max[1].setText("{:.3f}".format(max(data)))
+        pos = self.chart2.chart.mapToPosition(QPointF(x_avg[np.argmax(data)], max(data)), self.chart2.series_avg[1])
+        self.chart2.series_max[1].setPos(pos)
+        self.chart2.series_min[1].setText("{:.3f}".format(min(data)))
+        pos = self.chart2.chart.mapToPosition(QPointF(x_avg[np.argmin(data)], min(data)), self.chart2.series_avg[1])
+        self.chart2.series_min[1].setPos(pos)
 
     def num_points_update(self, value):
         try:
