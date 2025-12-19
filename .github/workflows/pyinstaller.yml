@@ -47,7 +47,7 @@ jobs:
       with:
         name: dist
         path: dist
-    - uses: pyTooling/Actions/releaser@main
+    - uses: pyTooling/Actions/releaser@v6.7.0
       if: contains(github.ref, 'main')
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
