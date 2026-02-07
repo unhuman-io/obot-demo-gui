@@ -22,9 +22,8 @@ import oauth2client
 import oauth2client.service_account
 import paramiko
 
-from PyQt5.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
-from PyQt5.QtWidgets import (
-    QAction,
+from PyQt6.QtCore import QTimer, Qt, QMargins, QCoreApplication, pyqtSignal, QPointF, QEvent
+from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
     QMainWindow,
@@ -50,8 +49,8 @@ from PyQt5.QtWidgets import (
     QGraphicsSimpleTextItem,
 )
 
-from PyQt5.QtGui import QPalette, QColor, QDoubleValidator
-from PyQt5.QtChart import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QLogValueAxis
+from PyQt6.QtGui import QPalette, QColor, QDoubleValidator
+from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QLogValueAxis
 
 import motor
 import numpy as np
@@ -562,7 +561,7 @@ class PlotTab(MotorTab):
         
         self.chart.update(x, [val])
 
-        val = np.array([d.y() for d in self.chart.series[0].pointsVector()])
+        val = np.array([d.y() for d in self.chart.series[0].points()])
         self.std.setNumber(np.std(val))
         self.mean.setNumber(np.mean(val))
         self.pp.setNumber(max(val) - min(val))
@@ -612,7 +611,7 @@ class PlotTab2(MotorTab):
         val = current_motor()[self.combo_box.currentText()].get()
         try:
             self.chart.update(self.t_seconds, [float(val)])
-            val2 = np.array([d.y() for d in self.chart.series[0].pointsVector()])
+            val2 = np.array([d.y() for d in self.chart.series[0].points()])
             self.std.setNumber(np.std(val2))
             self.mean.setNumber(np.mean(val2))
             self.pp.setNumber(max(val2) - min(val2))
@@ -645,7 +644,7 @@ class VelocityTab(MotorTab):
 
         self.chart = QChart()
         self.chart_view = QChartView(self.chart)
-        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+       # self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.series = QLineSeries()
         self.series.setUseOpenGL(True)
         self.chart.addSeries(self.series)
@@ -712,8 +711,8 @@ class VelocityTab(MotorTab):
                 self.series.append(self.t_seconds, vel)
                 if len(self.series) > 200:
                     self.series.remove(0)
-                self.axis_y.setMin(min([d.y() for d in self.series.pointsVector()]))
-                self.axis_y.setMax(max([d.y() for d in self.series.pointsVector()]))
+                self.axis_y.setMin(min([d.y() for d in self.series.points()]))
+                self.axis_y.setMax(max([d.y() for d in self.series.points()]))
                 self.axis_x.setMax(self.t_seconds)
                 self.axis_x.setMin(self.series.at(0).x())
             except ValueError:
@@ -1288,8 +1287,8 @@ class CalibrateTab(MotorTab):
         layout.addLayout(tlayout)
 
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
+      #  line.setFrameShape(QFrame.HLine)
+       # line.setFrameShadow(QFrame.Sunken)
         layout.addWidget(line)
 
         find_limits_layout = QHBoxLayout()
@@ -1684,7 +1683,7 @@ class BodeWindow(QWidget):
             super().__init__()
             self.chart = QChart()
             self.chart_view = QChartView(self.chart)
-            self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+            #self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
             self.series = QLineSeries()
             self.series.setUseOpenGL(True)
             self.chart.addSeries(self.series)
@@ -1777,7 +1776,7 @@ class CurrentTuningTab(MotorTab):
 
         self.chart = QChart()
         self.chart_view = QChartView(self.chart)
-        self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
+        #self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.series = QLineSeries()
         self.series.setUseOpenGL(True)
         self.series.setName("q_desired")
@@ -1926,16 +1925,16 @@ class CurrentTuningTab(MotorTab):
             self.seriesvd.replace(xy3)
             xy4 = [QPointF(x[0],x[1]) for x in np.column_stack((t_seconds, np.array(vq)))]
             self.seriesvq.replace(xy4)
-            min_y = min(min([d.y() for d in self.series.pointsVector()]), min([d.y() for d in self.series2.pointsVector()]),
-                        min([d.y() for d in self.series_d_des.pointsVector()]), min([d.y() for d in self.series_d_meas.pointsVector()]))
-            max_y = max(max([d.y() for d in self.series.pointsVector()]), max([d.y() for d in self.series2.pointsVector()]),
-                        max([d.y() for d in self.series_d_des.pointsVector()]), max([d.y() for d in self.series_d_meas.pointsVector()]))
+            min_y = min(min([d.y() for d in self.series.points()]), min([d.y() for d in self.series2.points()]),
+                        min([d.y() for d in self.series_d_des.points()]), min([d.y() for d in self.series_d_meas.points()]))
+            max_y = max(max([d.y() for d in self.series.points()]), max([d.y() for d in self.series2.points()]),
+                        max([d.y() for d in self.series_d_des.points()]), max([d.y() for d in self.series_d_meas.points()]))
             self.axis_y.setMin(min_y)
             self.axis_y.setMax(max_y)
             self.axis_x.setMin(min(t_seconds))
             self.axis_x.setMax(max(t_seconds))
-            min_y2 = min(min([d.y() for d in self.seriesvd.pointsVector()]), min([d.y() for d in self.seriesvq.pointsVector()]))
-            max_y2 = max(max([d.y() for d in self.seriesvd.pointsVector()]), max([d.y() for d in self.seriesvq.pointsVector()]))
+            min_y2 = min(min([d.y() for d in self.seriesvd.points()]), min([d.y() for d in self.seriesvq.points()]))
+            max_y2 = max(max([d.y() for d in self.seriesvd.points()]), max([d.y() for d in self.seriesvq.points()]))
             self.axis_y2.setMin(min_y2)
             self.axis_y2.setMax(max_y2)
         except ValueError as err:
@@ -1991,7 +1990,7 @@ class StreamingChart(QChartView):
     def __init__(self, num_lines=1, linetype=QLineSeries, *args, **kwargs):
         self.chart = QChart()
         super(StreamingChart, self).__init__(self.chart, *args, **kwargs)
-        self.setRubberBand(QChartView.VerticalRubberBand)
+        #self.setRubberBand(QChartView.VerticalRubberBand)
         self.num_lines = num_lines
         self.length = 500
         self.update_limits = True
@@ -2026,14 +2025,14 @@ class StreamingChart(QChartView):
                     self.series[i].append(t, data[i])
                 if len(self.series[i]) > self.length:
                     self.series[i].remove(0)
-                min1 = min(min1,min([d.y() for d in self.series[i].pointsVector()]))
-                max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
+                min1 = min(min1,min([d.y() for d in self.series[i].points()]))
+                max1 = max(max1,max([d.y() for d in self.series[i].points()]))
 
             if self.update_limits:
                 self.axis_y.setMin(min1)
                 self.axis_y.setMax(max1)
-                self.axis_x.setMax(max([d.x() for d in self.series[0].pointsVector()]))
-                self.axis_x.setMin(min([d.x() for d in self.series[0].pointsVector()]))
+                self.axis_x.setMax(max([d.x() for d in self.series[0].points()]))
+                self.axis_x.setMin(min([d.x() for d in self.series[0].points()]))
         except ValueError:
             pass
     
@@ -2058,8 +2057,8 @@ class StreamingChart2(StreamingChart):
                 self.series[i].append(t, data[i])
                 if len(self.series[i]) > self.length:
                     self.series[i].remove(0)
-                min1 = min([d.y() for d in self.series[i].pointsVector()])
-                max1 = max([d.y() for d in self.series[i].pointsVector()])
+                min1 = min([d.y() for d in self.series[i].points()])
+                max1 = max([d.y() for d in self.series[i].points()])
                 diff = max1 - min1
                 if diff == 0:
                     diff = 1
@@ -2073,8 +2072,8 @@ class StreamingChart2(StreamingChart):
                     else:
                         self.axis_y2.setMin(min1)
                         self.axis_y2.setMax(max1)
-                    self.axis_x.setMax(max([d.x() for d in self.series[0].pointsVector()]))
-                    self.axis_x.setMin(min([d.x() for d in self.series[0].pointsVector()]))
+                    self.axis_x.setMax(max([d.x() for d in self.series[0].points()]))
+                    self.axis_x.setMin(min([d.x() for d in self.series[0].points()]))
         except ValueError:
             pass
 
@@ -2110,14 +2109,14 @@ class HistogramLineChart(StreamingChart):
 
             if self.update_limits:
                 for i in range(self.num_lines):
-                    max1 = max(max1,max([d.y() for d in self.series[i].pointsVector()]))
+                    max1 = max(max1,max([d.y() for d in self.series[i].points()]))
                     self.axis_y.setMax(max1)
         except ValueError:
             pass
 
     def removePoints(self):
         for i in range(self.num_lines):
-            for index, point in enumerate(self.series[i].pointsVector()):
+            for index, point in enumerate(self.series[i].points()):
                 point.setY(0)
                 self.series[i].replace(index,point)
                 
@@ -2638,8 +2637,8 @@ class EncoderTab(MotorTab):
         self.diff_pp.setNumber(pp)
         self.diff_pp_um.setNumber(pp*2*np.pi/2**24/2*self.disk_um_val)
 
-        y = np.array([d.y() for d in self.chart2.series[0].pointsVector()])
-        x = np.array([d.x() for d in self.chart2.series[0].pointsVector()])
+        y = np.array([d.y() for d in self.chart2.series[0].points()])
+        x = np.array([d.x() for d in self.chart2.series[0].points()])
         inds = np.digitize(x, np.linspace(0, 2**24, int(self.num_avg_points.getNumber())))
         x_avg = np.bincount(inds-1, x)/np.bincount(inds-1)
         data = np.bincount(inds-1, y)/np.bincount(inds-1)
@@ -2658,8 +2657,8 @@ class EncoderTab(MotorTab):
         self.chart2.series_min[0].setPos(pos)
 
 
-        x = np.array([d.x() for d in self.chart2.series[1].pointsVector()])
-        y = np.array([d.y() for d in self.chart2.series[1].pointsVector()])
+        x = np.array([d.x() for d in self.chart2.series[1].points()])
+        y = np.array([d.y() for d in self.chart2.series[1].points()])
         inds = np.digitize(x, np.linspace(0, 2**24, int(self.num_avg_points.getNumber())))
         x_avg = np.bincount(inds-1, x)/np.bincount(inds-1)
         data = np.bincount(inds-1, y)/np.bincount(inds-1)
