@@ -1,5 +1,5 @@
-pyqt5
-pyqtchart
+pyqt6
+pyqt6-charts
 numpy
 pyyaml
 # external dependancies

@@ -16,7 +16,7 @@ jobs:
         arch: [amd64]
     runs-on: ubuntu-latest
     container: 
-      image: ubuntu:22.04
+      image: ubuntu:24.04
       options: --platform linux/${{ matrix.arch }}
 
     steps:
@@ -27,12 +27,12 @@ jobs:
       run: |
         apt-get update
         apt-get install -y curl sudo zip lsb-release libcap2-bin
-        DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y python3-pyqt5 python3-pyqt5.qtchart \
+        DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y python3-pyqt6 python3-pyqt6.qtcharts \
           python3-numpy pip python3-yaml python3-psutil python3-boto3 python3-git
         curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-obot.sh > install-obot.sh
         chmod +x install-obot.sh
         ./install-obot.sh --no-driver
-        pip install pyinstaller gspread oauth2client paramiko
+        pip install pyinstaller gspread oauth2client paramiko --break-system-packages
     - name: build with pyinstaller
       run: |
         export PYTHONPATH=/usr/share/motor-realtime/
@@ -40,7 +40,7 @@ jobs:
         echo -n " " >> buildnum
         echo -n ${{ github.sha }} >> buildnum
         cat buildnum
-        pyinstaller --hidden-import=PyQt5.sip --add-data="buildnum:." motor_gui.py
+        pyinstaller --hidden-import=PyQt6.sip --add-data="buildnum:." motor_gui.py
         zip -r dist.zip dist/
     - name: Archive production artifacts
       uses: actions/upload-artifact@main
