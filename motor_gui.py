@@ -340,7 +340,7 @@ def calculate_vq(pos, va, vb, vc):
     valpha_beta = (Kc*np.asmatrix(np.block([va,vb,vc])).transpose()).transpose()*1.5
     vd = np.asarray(cos_t) * np.asarray(valpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(valpha_beta[:,1])
     vq = np.asarray(sin_t) * np.asarray(valpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(valpha_beta[:,1])
-    return (vd, vq)
+    return (vd.item(), vq.item())
 
 def calculate_iq(pos, ia, ib, ic):
     cos_t = np.cos(pos)
@@ -349,7 +349,7 @@ def calculate_iq(pos, ia, ib, ic):
     ialpha_beta = (Kc*np.asmatrix(np.block([ia,ib,ic])).transpose()).transpose()
     id = np.asarray(cos_t) * np.asarray(ialpha_beta[:,0]) + np.asarray(-sin_t) * np.asarray(ialpha_beta[:,1])
     iq = np.asarray(sin_t) * np.asarray(ialpha_beta[:,0]) + np.asarray(cos_t) * np.asarray(ialpha_beta[:,1])
-    return (id, iq)
+    return (id.item(), iq.item())
 
 class MotorTab(QWidget):
     def __init__(self, *args, **kwargs):
@@ -644,7 +644,6 @@ class VelocityTab(MotorTab):
 
         self.chart = QChart()
         self.chart_view = QChartView(self.chart)
-       # self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.series = QLineSeries()
         self.series.setUseOpenGL(True)
         self.chart.addSeries(self.series)
@@ -1683,7 +1682,6 @@ class BodeWindow(QWidget):
             super().__init__()
             self.chart = QChart()
             self.chart_view = QChartView(self.chart)
-            #self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
             self.series = QLineSeries()
             self.series.setUseOpenGL(True)
             self.chart.addSeries(self.series)
@@ -1702,7 +1700,7 @@ class BodeWindow(QWidget):
             self.chart_view.viewport().installEventFilter(self)
 
         def eventFilter(self, obj, event):
-            if obj is self.chart_view.viewport() and event.type() == QEvent.MouseMove:
+            if obj is self.chart_view.viewport() and event.type() == QEvent.Type.MouseMove:
                 lp = event.pos()
                 sp = self.chart_view.mapToScene(lp)
                 vp = self.chart_view.chart().mapToValue(sp)
@@ -1776,7 +1774,6 @@ class CurrentTuningTab(MotorTab):
 
         self.chart = QChart()
         self.chart_view = QChartView(self.chart)
-        #self.chart_view.setRubberBand(QChartView.VerticalRubberBand)
         self.series = QLineSeries()
         self.series.setUseOpenGL(True)
         self.series.setName("q_desired")
@@ -1908,8 +1905,7 @@ class CurrentTuningTab(MotorTab):
 
             if self.command.current_tuning.mode == motor.TuningMode.Chirp:
                 # plot bode
-                self.bode_window.append(self.freq[fmeas_mi], np.abs(mag_meas/mag_des), phase_deg)
-
+                self.bode_window.append(self.freq[fmeas_mi].item(), np.abs(mag_meas/mag_des).item(), phase_deg.item())
 
          
             # plot timeseries
@@ -1990,7 +1986,6 @@ class StreamingChart(QChartView):
     def __init__(self, num_lines=1, linetype=QLineSeries, *args, **kwargs):
         self.chart = QChart()
         super(StreamingChart, self).__init__(self.chart, *args, **kwargs)
-        #self.setRubberBand(QChartView.VerticalRubberBand)
         self.num_lines = num_lines
         self.length = 500
         self.update_limits = True
