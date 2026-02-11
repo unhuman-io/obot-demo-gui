@@ -1286,8 +1286,8 @@ class CalibrateTab(MotorTab):
         layout.addLayout(tlayout)
 
         line = QFrame()
-      #  line.setFrameShape(QFrame.HLine)
-       # line.setFrameShadow(QFrame.Sunken)
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line)
 
         find_limits_layout = QHBoxLayout()
