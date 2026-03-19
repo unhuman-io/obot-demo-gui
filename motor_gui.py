@@ -1515,6 +1515,9 @@ class MainWindow(QMainWindow):
         elif "-f" in QCoreApplication.arguments():
             self.can_address = QCoreApplication.arguments()[QCoreApplication.arguments().index("-f") + 1]
             self.connect_motor_can(self.can_address)
+        elif "-e" in QCoreApplication.arguments():
+            self.eth_l2 = QCoreApplication.arguments()[QCoreApplication.arguments().index("-e") + 1]
+            self.connect_motor_eth_l2(self.eth_l2)
         else:
             self.connect_motor(motors[0].name())
 
@@ -1606,6 +1609,11 @@ class MainWindow(QMainWindow):
         self.ip_address = ip
         motor_manager.get_motors_by_ip([ip], allow_simulated = self.simulated)
         self.connect_motor_generic(ip)
+
+    def connect_motor_eth_l2(self, text):
+        print("Connecting motor " + text)
+        motor_manager.get_motors_by_eth_l2([text], allow_simulated = self.simulated)
+        self.connect_motor_generic(text)
 
     def connect_motor_can(self, text):
         print("Connecting motor " + text)
