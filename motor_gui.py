@@ -1612,7 +1612,7 @@ class MainWindow(QMainWindow):
 
     def connect_motor_eth_l2(self, text):
         print("Connecting motor " + text)
-        motor_manager.get_motors_by_eth_l2([text], allow_simulated = self.simulated)
+        motor_manager.get_motors_by_eth_l2([text], print_unconnected=True, allow_simulated = self.simulated)
         self.connect_motor_generic(text)
 
     def connect_motor_can(self, text):
